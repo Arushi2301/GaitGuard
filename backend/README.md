@@ -33,6 +33,17 @@ python test_local.py sample.mp4
 
 Recording tip for `sample.mp4`: side view, full body in frame, 2-3 m from the camera, 5-10 s of squats. (Videos are git-ignored.)
 
+## Sample video
+
+Test video: ["A Woman Doing Squats" by MART PRODUCTION on Pexels](https://www.pexels.com/video/a-woman-doing-squats-8837118/) (free license).
+
+1. Download it and save it as `backend/sample.mp4` (it is git-ignored, so it is not in the repo).
+2. Run:
+   ```powershell
+   .\venv\Scripts\python.exe test_local.py sample.mp4
+   ```
+3. Expected result: `status: "ok"`, with left/right minimum knee angles of roughly 59 and 65 degrees (a deep squat). Only the first 15 s are analyzed.
+
 ## Call /analyze
 
 ```bash
