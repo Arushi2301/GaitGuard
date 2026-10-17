@@ -47,36 +47,38 @@ def analyze_video(path):
     left_angles = []
     right_angles = []
 
-    with vision.PoseLandmarker.create_from_options(options) as landmarker:
-        frame_idx = 0
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                break
-            if frame_idx / fps > MAX_SECONDS:
-                break
+    try:
+        with vision.PoseLandmarker.create_from_options(options) as landmarker:
+            frame_idx = 0
+            while True:
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                if frame_idx / fps > MAX_SECONDS:
+                    break
 
-            if frame_idx % FRAME_STEP == 0:
-                height, width = frame.shape[:2]
-                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # OpenCV gives BGR, MediaPipe wants RGB
-                image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-                timestamp_ms = int(frame_idx * 1000 / fps)  # must strictly increase
-                result = landmarker.detect_for_video(image, timestamp_ms)
-                frames_analyzed += 1
+                if frame_idx % FRAME_STEP == 0:
+                    height, width = frame.shape[:2]
+                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # OpenCV gives BGR, MediaPipe wants RGB
+                    image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                    timestamp_ms = int(frame_idx * 1000 / fps)  # must strictly increase
+                    result = landmarker.detect_for_video(image, timestamp_ms)
+                    frames_analyzed += 1
 
-                if result.pose_landmarks:
-                    frames_with_pose += 1
-                    landmarks = result.pose_landmarks[0]  # first (only) person
-                    left = _knee_angle(landmarks, LEFT_LEG, width, height)
-                    right = _knee_angle(landmarks, RIGHT_LEG, width, height)
-                    if left is not None:
-                        left_angles.append(left)
-                    if right is not None:
-                        right_angles.append(right)
+                    if result.pose_landmarks:
+                        frames_with_pose += 1
+                        landmarks = result.pose_landmarks[0]  # first (only) person
+                        left = _knee_angle(landmarks, LEFT_LEG, width, height)
+                        right = _knee_angle(landmarks, RIGHT_LEG, width, height)
+                        if left is not None:
+                            left_angles.append(left)
+                        if right is not None:
+                            right_angles.append(right)
 
-            frame_idx += 1
+                frame_idx += 1
 
-    cap.release()
+    finally:
+        cap.release()  # always free the file, even on error (Windows can't delete open files)
 
     if frames_with_pose == 0:
         return {"status": "error", "reason": "no_pose_detected"}
