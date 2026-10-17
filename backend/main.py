@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import tempfile
@@ -7,6 +8,8 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from pose import analyze_video
+
+logger = logging.getLogger("uvicorn.error")  # shows up in the uvicorn console
 
 app = FastAPI(title="GaitGuard pose API")
 
@@ -36,7 +39,9 @@ def analyze(file: UploadFile = File(...), movement: str = Form("squat")):
             shutil.copyfileobj(file.file, temp_file)
         result = analyze_video(temp_path)
     except Exception:
-        result = {"status": "error", "reason": "cannot_open_video"}
+        # Anything unexpected: print the full traceback for us, give the client a stable error
+        logger.exception("analyze failed")
+        result = {"status": "error", "reason": "processing_failed"}
     finally:
         os.remove(temp_path)  # always clean up
 

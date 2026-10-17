@@ -84,6 +84,7 @@ Failure (returned with HTTP 200, never a 500):
 | `cannot_open_video` | the file isn't a readable video |
 | `no_pose_detected` | no person was found in any analyzed frame |
 | `legs_not_visible` | a person was found but hip/knee/ankle were never clearly visible on either side |
+| `processing_failed` | unexpected server-side error (the traceback is printed in the server console) |
 
 ## How it works
 
