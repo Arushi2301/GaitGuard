@@ -1,0 +1,19 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node / mobile
+node_modules/
+.expo/
+
+# Large files (models and videos are not committed)
+*.task
+*.mp4
+*.mov
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
