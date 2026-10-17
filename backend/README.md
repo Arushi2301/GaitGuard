@@ -86,6 +86,15 @@ Failure (returned with HTTP 200, never a 500):
 | `legs_not_visible` | a person was found but hip/knee/ankle were never clearly visible on either side |
 | `processing_failed` | unexpected server-side error (the traceback is printed in the server console) |
 
+## Tested on real video
+
+The pipeline was verified end to end on a real side-view squat video (4K, 25 fps, ~30 s): both `test_local.py` and `POST /analyze` returned the same result (`status: ok`, left min ~59 deg, right min ~66 deg, pose found in every analyzed frame).
+
+Things to expect:
+- Only the first 15 s of a video are analyzed, so longer clips are truncated.
+- In a side view the far leg is partly hidden, so its knee may be usable in fewer frames. Those frames are skipped, and the angle is `null` only if the leg is never visible.
+- A very deep squat can give angles below 70 deg; that is a real reading, not an error.
+
 ## How it works
 
 1. OpenCV reads the video (every 2nd frame, first 15 s only).
