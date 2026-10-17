@@ -101,3 +101,20 @@ Things to expect:
 2. Each frame is converted BGR -> RGB and given to MediaPipe PoseLandmarker (Tasks API, video mode).
 3. For each leg, hip/knee/ankle landmarks are converted to pixels and `joint_angle()` computes the angle at the knee. Frames where any of the three points has visibility <= 0.5 are skipped for that leg.
 4. The minimum angle per leg is returned.
+
+## Notes for teammates
+
+### For the frontend (Member 1)
+
+- POST the video to `http://<laptop-ip>:8000/analyze` as multipart form data: field `file` (the video) and optional `movement` (default `"squat"`).
+- Don't set the `Content-Type` header manually; let the HTTP client add it, because it needs the multipart boundary.
+- Phone and laptop must be on the same network (use a phone hotspot).
+- Record at 1080p, side view, full body visible.
+
+### For the screening logic (Member 3)
+
+- Use `left_knee_min_angle` and `right_knee_min_angle` (degrees). A smaller angle means a deeper knee bend.
+- Either angle can be `null` if that leg wasn't visible. Handle that case.
+- If `status` is `"error"`:
+  - `cannot_open_video`, `no_pose_detected` or `legs_not_visible`: ask the user to re-record.
+  - `processing_failed`: show "Analysis failed, please try again".
