@@ -63,8 +63,17 @@ src/
     theme.ts           colors and shared styles
   services/
     analysis.ts        uploads the video to the backend
+    screening.ts       screening logic, measurement validation, and error mapping
     videoStore.ts      holds the selected video URI between screens
 ```
+
+## Run tests
+
+```bash
+npm test
+```
+
+Runs the automated test suite for screening logic, measurement validation, backend contract error mapping, and scientific integrity using Node.js's built-in test runner.
 
 ## Notes
 
