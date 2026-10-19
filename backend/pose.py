@@ -5,6 +5,7 @@ import mediapipe as mp
 from mediapipe.tasks.python import BaseOptions, vision
 
 from angles import joint_angle
+from reps import summarize_leg
 
 MODEL_PATH = Path(__file__).parent / "models" / "pose_landmarker_lite.task"
 
@@ -83,10 +84,11 @@ def analyze_video(path):
                         landmarks = result.pose_landmarks[0]  # first (only) person
                         left = _knee_angle(landmarks, LEFT_LEG, width, height)
                         right = _knee_angle(landmarks, RIGHT_LEG, width, height)
-                        if left is not None:
-                            left_angles.append(left)
-                        if right is not None:
-                            right_angles.append(right)
+                        left_angles.append(left)
+                        right_angles.append(right)
+                    else:
+                        left_angles.append(None)  # keep one entry per analyzed frame (None = not visible)
+                        right_angles.append(None)
 
                 frame_idx += 1
 
@@ -95,16 +97,34 @@ def analyze_video(path):
 
     if frames_with_pose == 0:
         return {"status": "error", "reason": "no_pose_detected"}
-    if not left_angles and not right_angles:
+    if all(a is None for a in left_angles) and all(a is None for a in right_angles):
         return {"status": "error", "reason": "legs_not_visible"}
+
+    samples_per_second = fps / FRAME_STEP
+    left = summarize_leg(left_angles, samples_per_second)
+    right = summarize_leg(right_angles, samples_per_second)
+
+    # rep_count comes from the leg that was visible in more frames
+    left_visible = sum(a is not None for a in left_angles)
+    right_visible = sum(a is not None for a in right_angles)
+    main_leg = left if left_visible >= right_visible else right
+    # "ok" only if every leg we could measure had at least one rep; otherwise some leg fell back
+    used_fallback = left["used_fallback"] or right["used_fallback"]
 
     return {
         "status": "ok",
         "metric": "knee_flexion_angle",
         "unit": "degrees",
-        # Smallest angle = deepest knee bend
-        "left_knee_min_angle": round(min(left_angles), 1) if left_angles else None,
-        "right_knee_min_angle": round(min(right_angles), 1) if right_angles else None,
+        # Smallest angle = deepest knee bend (overall minimum over the whole video)
+        "left_knee_min_angle": left["overall_min"],
+        "right_knee_min_angle": right["overall_min"],
         "frames_analyzed": frames_analyzed,
         "frames_with_pose": frames_with_pose,
+        # Per-rep minima (see reps.py) and their mean
+        "left_knee_rep_min_angles": left["rep_mins"],
+        "right_knee_rep_min_angles": right["rep_mins"],
+        "left_knee_mean_rep_min_angle": left["mean_rep_min"],
+        "right_knee_mean_rep_min_angle": right["mean_rep_min"],
+        "rep_count": len(main_leg["rep_mins"]),
+        "rep_detection": "fallback_overall_min" if used_fallback else "ok",
     }

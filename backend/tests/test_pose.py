@@ -49,6 +49,17 @@ def test_occluded_leg_is_null_not_zero(monkeypatch, tmp_path):
     assert result["status"] == "ok"
     assert result["right_knee_min_angle"] is None  # never 0
     assert abs(result["left_knee_min_angle"] - 90.0) < 0.5
+    # A leg that was never visible has no rep data at all
+    assert result["right_knee_rep_min_angles"] == []
+    assert result["right_knee_mean_rep_min_angle"] is None
+
+
+def test_constant_angle_falls_back_to_overall_minimum(monkeypatch, tmp_path):
+    result = _run_with_fake_landmarker(monkeypatch, tmp_path, right_visibility=0.99)
+    assert result["rep_count"] == 0
+    assert result["rep_detection"] == "fallback_overall_min"
+    assert result["left_knee_rep_min_angles"] == []
+    assert result["left_knee_mean_rep_min_angle"] == result["left_knee_min_angle"]
 
 
 def test_both_legs_visible_gives_two_angles(monkeypatch, tmp_path):

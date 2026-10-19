@@ -15,6 +15,9 @@ CONTRACT_KEYS = [
     "status", "movement", "metric", "unit",
     "left_knee_min_angle", "right_knee_min_angle",
     "frames_analyzed", "frames_with_pose",
+    "left_knee_rep_min_angles", "right_knee_rep_min_angles",
+    "left_knee_mean_rep_min_angle", "right_knee_mean_rep_min_angle",
+    "rep_count", "rep_detection",
 ]
 
 
@@ -79,6 +82,33 @@ def test_valid_video_returns_full_contract(sample_response):
         assert body[key] is None or (isinstance(body[key], (int, float)) and 0 <= body[key] <= 180)
     assert 0 < body["frames_analyzed"]
     assert body["frames_with_pose"] <= body["frames_analyzed"]
+
+
+@needs_sample
+def test_valid_video_rep_fields(sample_response):
+    body = sample_response.json()
+    assert body["rep_detection"] in ("ok", "fallback_overall_min")
+    assert isinstance(body["rep_count"], int) and body["rep_count"] >= 0
+    for side in ("left", "right"):
+        rep_mins = body[f"{side}_knee_rep_min_angles"]
+        mean = body[f"{side}_knee_mean_rep_min_angle"]
+        overall_min = body[f"{side}_knee_min_angle"]
+        assert isinstance(rep_mins, list)
+        if overall_min is None:
+            assert rep_mins == [] and mean is None
+        else:
+            # The overall minimum keeps its old meaning: nothing can be deeper than it
+            assert all(overall_min <= m <= 180 for m in rep_mins)
+            assert overall_min <= mean <= 180
+
+
+@needs_sample
+def test_sample_video_has_two_squats(sample_response):
+    # Two squats are visible in the first 15 s (bottoms at about 3 s and 10 s)
+    body = sample_response.json()
+    assert body["rep_count"] == 2
+    assert body["rep_detection"] == "ok"
+    assert len(body["right_knee_rep_min_angles"]) == 2
 
 
 @needs_sample
