@@ -15,19 +15,20 @@ _Last updated: 2026-10-19_
 - Frame downscaling to max 960px: processing time ~36 s → ~14 s on the 4K sample, angles unchanged within 0.3°
 - Automated pytest suite in `tests/` (20 tests: angles, API contract, every error code, occlusion → null); output in `evidence/pytest_results.txt`
 - Left/right verification: annotated deepest-squat frame (`evidence/left_right_check.png`) and frame stats (`evidence/frame_stats.txt`), made by `scripts/left_right_check.py`
+- [TESTING.md](TESTING.md): how to run the tests, test-case table, sample results, left/right check, frontend contract check, limitations
 - README: setup, JSON contract, phone-testing steps, teammate notes
 
 ### 🚧 In progress
 - Nothing active right now
 
 ### ⏳ Not done yet
-- TESTING.md
 - Live test from a phone through the app
 - Database (only if the team picks the database route)
 
 ### ⚠️ Known limitations
 - Only knee angle is measured; `movement` is echoed back but not used
 - First 15 s of video only
+- Single camera, no depth: angles come from 2D positions, so camera angle and distance affect them
 - Far leg may be null in side view (occlusion)
 - API URL depends on the laptop's LAN IP (hardcoded in `frontend/src/constants/config.ts`)
 - Angle convention: interior angle (180° = straight); clinical knee flexion = 180 − angle
@@ -54,6 +55,14 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8000
 
 - `GET http://localhost:8000/health` -> `{"status":"ok"}`
 - Interactive docs: `http://localhost:8000/docs`
+
+## Run the automated tests
+
+```powershell
+.\venv\Scripts\python.exe -m pytest -v
+```
+
+Details, the test-case table and the evidence are in [TESTING.md](TESTING.md).
 
 ## Test without the server
 
