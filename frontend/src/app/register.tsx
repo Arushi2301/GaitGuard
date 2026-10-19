@@ -3,14 +3,14 @@ import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { AppButton, AppInput } from '../components/ui';
 import { normalizePhone, useAuth } from '../services/auth';
@@ -121,7 +121,7 @@ export default function Register() {
         {pwMode === 'custom' ? (
           <>
             <AppInput label="Password" icon="lock-closed-outline" placeholder="At least 8 characters"
-              value={password} onChangeText={setPassword} secureTextEntry={!showPw}
+              value={password} onChangeText={t => { setPassword(t); setErrors(e => ({ ...e, password: '', confirm: '' })); }} secureTextEntry={!showPw}
               autoCapitalize="none" error={errors.password} />
 
             {password.length > 0 && (
@@ -134,7 +134,7 @@ export default function Register() {
             )}
 
             <AppInput label="Confirm password" icon="lock-closed-outline" placeholder="Re-enter password"
-              value={confirm} onChangeText={setConfirm} secureTextEntry={!showPw}
+              value={confirm} onChangeText={t => { setConfirm(t); setErrors(e => ({ ...e, confirm: '' })); }} secureTextEntry={!showPw}
               autoCapitalize="none" error={errors.confirm} />
 
             <Pressable onPress={() => setShowPw(v => !v)} style={s.inline}>

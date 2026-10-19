@@ -4,6 +4,7 @@ import { ReactNode } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../services/auth';
+import { useNotifications } from '../services/notifications';
 import { space } from '../theme/palette';
 import { useTheme } from '../theme/ThemeContext';
 
@@ -44,10 +45,11 @@ function IconButton({ icon, onPress, badge }: {
 }
 
 /* ---------- Top bar ---------- */
-export default function TopBar({ subtitle, unread = 0 }: { subtitle?: string; unread?: number }) {
+export default function TopBar({ subtitle }: { subtitle?: string }) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const firstName = user?.name?.split(' ')[0] ?? 'there';
+    const { unreadCount } = useNotifications();
 
   return (
     <View style={s.row}>
@@ -60,7 +62,7 @@ export default function TopBar({ subtitle, unread = 0 }: { subtitle?: string; un
       </Pressable>
 
       <View style={{ flexDirection: 'row' }}>
-        <IconButton icon="notifications-outline" badge={unread} onPress={() => router.push('/notifications')} />
+                <IconButton icon="notifications-outline" badge={unreadCount} onPress={() => router.push('/notifications')} />
         <IconButton icon="settings-outline" onPress={() => router.push('/settings')} />
       </View>
     </View>

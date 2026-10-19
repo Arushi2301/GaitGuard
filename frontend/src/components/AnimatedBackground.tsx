@@ -167,11 +167,11 @@ export default function AnimatedBackground({ showFigure = true }: { showFigure?:
         style={{ bottom: height * 0.2, left: -width * 0.3, opacity: blobOpacity }} />
 
       <FloatCard icon="body" bg={colors.pink} fg={colors.onPastel} duration={2600} rotate="-6deg"
-        style={{ top: height * 0.14, left: 20, opacity: cardOpacity }} />
+        style={{ top: height * 0.32, left: 16, opacity: cardOpacity }} />
       <FloatCard icon="pulse" bg={colors.mint} fg={colors.onPastel} duration={3000} rotate="5deg"
-        style={{ top: height * 0.19, right: 20, opacity: cardOpacity }} />
+        style={{ top: height * 0.46, right: 16, opacity: cardOpacity }} />
       <FloatCard icon="bar-chart" bg={colors.yellow} fg={colors.onPastel} duration={2800} rotate="-4deg"
-        style={{ bottom: height * 0.24, left: 24, opacity: cardOpacity }} />
+        style={{ bottom: height * 0.34, left: 16, opacity: cardOpacity }} />
 
       {showFigure && (
         <View style={{ position: 'absolute', top: height * 0.2, left: 0, right: 0, alignItems: 'center' }}>

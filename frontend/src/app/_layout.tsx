@@ -2,6 +2,7 @@ import { DancingScript_600SemiBold, useFonts } from '@expo-google-fonts/dancing-
 import { Stack } from 'expo-router';
 import { StatusBar, View } from 'react-native';
 import { AuthProvider } from '../services/auth';
+import { NotificationsProvider } from '../services/notifications';
 import { SettingsProvider } from '../services/settings';
 import { ThemeProvider, useTheme } from '../theme/ThemeContext';
 
@@ -32,7 +33,12 @@ function RootStack() {
 
         {/* Main app (bottom tabs) */}
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-
+        
+        {/* Top bar screens */}
+        <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+        <Stack.Screen name="profile" options={{ title: 'My Profile' }} />
+        <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+        <Stack.Screen name="help" options={{ title: 'Help & Support' }} />
         {/* Analysis flow (existing screens) */}
         <Stack.Screen name="select-movement" options={{ title: 'Choose Movement' }} />
         <Stack.Screen name="capture" options={{ title: 'Record or Upload' }} />
@@ -48,8 +54,10 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <SettingsProvider>
-        <AuthProvider>
-          <RootStack />
+                <AuthProvider>
+          <NotificationsProvider>
+            <RootStack />
+          </NotificationsProvider>
         </AuthProvider>
       </SettingsProvider>
     </ThemeProvider>
