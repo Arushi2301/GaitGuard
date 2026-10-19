@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { useAuth } from './auth';
 import { getSettings } from './settings';
 
 export type NotificationType = 'analysis_complete' | 'analysis_failed' | 'progress' | 'announcement';
@@ -13,17 +14,18 @@ export type AppNotification = {
   read: boolean;
 };
 
-const STORAGE_KEY = 'gg.notifications';
 const MAX_ITEMS = 50;
+// Each account gets its own list
+const keyFor = (email: string) => `gg.notifications:${email}`;
 
-const WELCOME: AppNotification = {
+const welcome = (): AppNotification => ({
   id: 'welcome',
   type: 'announcement',
   title: 'Welcome to GaitGuard 👋',
   body: 'Record or upload a short movement video to get your first screening result.',
   createdAt: new Date().toISOString(),
   read: false,
-};
+});
 
 type NotificationsContextValue = {
   items: AppNotification[];
@@ -38,38 +40,60 @@ type NotificationsContextValue = {
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const email = user?.email ?? null;
+  const emailRef = useRef<string | null>(email);
   const [items, setItems] = useState<AppNotification[]>([]);
 
+  // Load the list of whoever is logged in (and clear it on logout)
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then(raw => setItems(raw ? JSON.parse(raw) : [WELCOME]))
-      .catch(() => setItems([WELCOME]));
-  }, []);
+    emailRef.current = email;
+    if (!email) {
+      setItems([]);
+      return;
+    }
+    AsyncStorage.getItem(keyFor(email))
+      .then(raw => {
+        if (emailRef.current !== email) return; // user changed meanwhile
+        if (raw) {
+          setItems(JSON.parse(raw));
+        } else {
+          const first = [welcome()];
+          setItems(first);
+          AsyncStorage.setItem(keyFor(email), JSON.stringify(first)).catch(() => {});
+        }
+      })
+      .catch(() => setItems([]));
+  }, [email]);
 
-  const save = (next: AppNotification[]) => {
-    setItems(next);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+  const persist = (next: AppNotification[]) => {
+    if (emailRef.current) {
+      AsyncStorage.setItem(keyFor(emailRef.current), JSON.stringify(next)).catch(() => {});
+    }
   };
 
+  const update = (fn: (prev: AppNotification[]) => AppNotification[]) =>
+    setItems(prev => {
+      const next = fn(prev);
+      persist(next);
+      return next;
+    });
+
   const notify: NotificationsContextValue['notify'] = n => {
-    if (!getSettings().notifications) return; // user turned notifications off
+    if (!getSettings().notifications || !emailRef.current) return;
     const item: AppNotification = {
       ...n,
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       createdAt: new Date().toISOString(),
       read: false,
     };
-    setItems(prev => {
-      const next = [item, ...prev].slice(0, MAX_ITEMS);
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
+    update(prev => [item, ...prev].slice(0, MAX_ITEMS));
   };
 
-  const markRead = (id: string) => save(items.map(i => (i.id === id ? { ...i, read: true } : i)));
-  const markAllRead = () => save(items.map(i => ({ ...i, read: true })));
-  const remove = (id: string) => save(items.filter(i => i.id !== id));
-  const clearAll = () => save([]);
+  const markRead = (id: string) => update(prev => prev.map(i => (i.id === id ? { ...i, read: true } : i)));
+  const markAllRead = () => update(prev => prev.map(i => ({ ...i, read: true })));
+  const remove = (id: string) => update(prev => prev.filter(i => i.id !== id));
+  const clearAll = () => update(() => []);
 
   const unreadCount = items.filter(i => !i.read).length;
 

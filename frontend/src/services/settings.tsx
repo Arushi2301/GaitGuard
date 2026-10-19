@@ -5,8 +5,6 @@ import { API_URL } from '../constants/config';
 export type AppSettings = {
   welcomeSound: boolean;
   notifications: boolean;
-  maxRecordSeconds: 10 | 15;
-  cameraFacing: 'back' | 'front';
   apiUrl: string;
 };
 
@@ -15,8 +13,6 @@ const STORAGE_KEY = 'gg.settings';
 const DEFAULTS: AppSettings = {
   welcomeSound: true,
   notifications: true,
-  maxRecordSeconds: 15,
-  cameraFacing: 'back',
   apiUrl: API_URL,
 };
 

@@ -1,22 +1,46 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppButton } from '../components/ui';
 import { getMovement } from '../constants/movements';
-import { colors, ui } from '../constants/theme';
 import { analyzeVideo } from '../services/analysis';
+import { useAuth } from '../services/auth';
+import { addHistory, parseRepStats, RepStats } from '../services/history';
+import { useNotifications } from '../services/notifications';
 import { processAnalysisResult, ScreeningOutcome } from '../services/screening';
 import { getVideoUri } from '../services/videoStore';
+import { radius, space } from '../theme/palette';
+import { useTheme } from '../theme/ThemeContext';
+
+const RETRY_TIPS: Record<string, string[]> = {
+  no_pose_detected: ['Make sure your whole body is in the frame', 'Improve the lighting'],
+  legs_not_visible: ['Keep hips, knees and ankles visible', 'Avoid loose clothing over the knees'],
+  cannot_open_video: ['Record a new video in the app', 'Use a standard MP4 video'],
+  network_error: ['Check that the backend is running', 'Phone and laptop must be on the same hotspot', 'Check Settings → Server'],
+  timeout: ['Try a shorter clip', 'Check the network connection'],
+};
+
+const fmt = (n: number) => n.toFixed(1);
 
 export default function Result() {
+  const { colors } = useTheme();
+  const { user } = useAuth();
+  const { notify } = useNotifications();
   const { movement } = useLocalSearchParams<{ movement: string }>();
   const uri = getVideoUri() ?? '';
+
   const [loading, setLoading] = useState(true);
   const [outcome, setOutcome] = useState<ScreeningOutcome | null>(null);
+  const [reps, setReps] = useState<RepStats | null>(null);
   const requestRef = useRef<{ key: string; promise: ReturnType<typeof analyzeVideo> } | null>(null);
+  const savedRef = useRef(false);
 
   const movementDetails = getMovement(movement);
-  const movementName = movementDetails?.name ?? (movement ? movement.charAt(0).toUpperCase() + movement.slice(1) : 'Movement Screening');
+  const movementName =
+    movementDetails?.name ?? (movement ? movement.charAt(0).toUpperCase() + movement.slice(1) : 'Movement Screening');
 
+  /* ---------- Member 3's analysis flow (unchanged logic) ---------- */
   useEffect(() => {
     if (!uri) {
       setLoading(false);
@@ -33,32 +57,23 @@ export default function Result() {
 
     // Prevent duplicate network calls in Strict Mode or re-renders
     if (!requestRef.current || requestRef.current.key !== requestKey) {
-      requestRef.current = {
-        key: requestKey,
-        promise: analyzeVideo(uri, movement),
-      };
+      requestRef.current = { key: requestKey, promise: analyzeVideo(uri, movement) };
     }
 
     requestRef.current.promise
       .then(res => {
         if (isMounted) {
-          const processed = processAnalysisResult(res, movement);
-          setOutcome(processed);
+          setOutcome(processAnalysisResult(res, movement));
+          setReps(parseRepStats(res.ok ? res.data : null)); // extra per-rep fields
         }
       })
       .catch(() => {
         if (isMounted) {
-          setOutcome({
-            success: false,
-            errorMessage: 'Analysis failed. Please try again.',
-            reason: 'unhandled_client_error',
-          });
+          setOutcome({ success: false, errorMessage: 'Analysis failed. Please try again.', reason: 'unhandled_client_error' });
         }
       })
       .finally(() => {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       });
 
     return () => {
@@ -66,216 +81,238 @@ export default function Result() {
     };
   }, [uri, movement]);
 
+  /* ---------- Save to history + notify (once) ---------- */
+  useEffect(() => {
+    if (!outcome || savedRef.current) return;
+    savedRef.current = true;
+
+    if (outcome.success) {
+      const mm = outcome.measurement;
+      const r = reps ?? parseRepStats(null);
+      if (user) {
+        addHistory({
+          userEmail: user.email,
+          movement: movement || mm.movement,
+          leftKneeMinAngle: mm.leftKneeMinAngle,
+          rightKneeMinAngle: mm.rightKneeMinAngle,
+          framesAnalyzed: mm.framesAnalyzed,
+          framesWithPose: mm.framesWithPose,
+          ...r,
+        }).catch(() => {});
+      }
+      const shown = r.rightMeanRepMin ?? mm.rightKneeMinAngle ?? r.leftMeanRepMin ?? mm.leftKneeMinAngle;
+      notify({
+        type: 'analysis_complete',
+        title: `${movementName} analyzed`,
+        body: `${r.repCount !== null ? `${r.repCount} reps · ` : ''}${shown !== null ? `knee angle ${fmt(shown)}°` : 'result ready'}`,
+      });
+    } else {
+      notify({ type: 'analysis_failed', title: 'Analysis incomplete', body: outcome.errorMessage });
+    }
+  }, [outcome]);
+
+  const goHome = () => {
+    router.dismissAll();
+    router.navigate('/(tabs)/home');
+  };
+
+  /* ---------- UI ---------- */
   return (
-    <View style={ui.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={ui.title}>{movementName}</Text>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+        <Text style={[s.title, { color: colors.text }]}>{movementName}</Text>
+        <Text style={{ color: colors.muted, marginBottom: space.md }}>
+          {new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+        </Text>
 
         {loading && (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[ui.text, { marginTop: 16, fontWeight: '600' }]}>Analyzing video…</Text>
-            <Text style={[ui.muted, { marginTop: 6, textAlign: 'center' }]}>
-              Tracking body landmarks and calculating knee angles.
+          <View style={[s.loading, { backgroundColor: colors.lavender }]}>
+            <ActivityIndicator size="large" color={colors.onPastel} />
+            <Text style={[s.loadingTitle, { color: colors.onPastel }]}>Analyzing video…</Text>
+            <Text style={{ color: colors.onPastel, opacity: 0.75, textAlign: 'center', marginTop: 4 }}>
+              Tracking body landmarks and calculating knee angles. This usually takes 10–30 seconds.
             </Text>
           </View>
         )}
 
-        {!loading && outcome && (
-          outcome.success ? (
-            <View style={styles.section}>
-              {/* Analysis Status */}
-              <View style={[ui.card, styles.statusCard]}>
-                <Text style={styles.statusLabel}>Analysis Status</Text>
-                <Text style={styles.statusValue}>Analysis Complete</Text>
+        {!loading && outcome?.success && (
+          <>
+            {/* Status + reps */}
+            <View style={s.row}>
+              <View style={[s.badge, { backgroundColor: colors.mint }]}>
+                <Ionicons name="checkmark-circle" size={18} color={colors.onPastel} />
+                <Text style={[s.badgeText, { color: colors.onPastel }]}>Analysis complete</Text>
               </View>
-
-              {/* Movement & Metric Header */}
-              <View style={ui.card}>
-                <Text style={ui.muted}>Movement Type</Text>
-                <Text style={[ui.text, styles.headline]}>{outcome.measurement.movement}</Text>
-                <Text style={[ui.muted, { marginTop: 4 }]}>
-                  Metric: Minimum Knee Flexion Angle ({outcome.measurement.unit})
-                </Text>
-              </View>
-
-              {/* Left Knee Angle */}
-              <View style={ui.card}>
-                <Text style={ui.muted}>Left Knee</Text>
-                {outcome.measurement.hasLeftAngle ? (
-                  <Text style={styles.angleText}>
-                    {outcome.measurement.leftKneeMinAngle}
-                    <Text style={styles.unitText}>° ({outcome.measurement.unit})</Text>
-                  </Text>
-                ) : (
-                  <Text style={[ui.muted, styles.unmeasuredText]}>
-                    Not measured — leg was not clearly visible in the video
-                  </Text>
-                )}
-              </View>
-
-              {/* Right Knee Angle */}
-              <View style={ui.card}>
-                <Text style={ui.muted}>Right Knee</Text>
-                {outcome.measurement.hasRightAngle ? (
-                  <Text style={styles.angleText}>
-                    {outcome.measurement.rightKneeMinAngle}
-                    <Text style={styles.unitText}>° ({outcome.measurement.unit})</Text>
-                  </Text>
-                ) : (
-                  <Text style={[ui.muted, styles.unmeasuredText]}>
-                    Not measured — leg was not clearly visible in the video
-                  </Text>
-                )}
-              </View>
-
-              {/* Educational Explanation */}
-              <View style={ui.card}>
-                <Text style={[ui.text, { fontWeight: '600', marginBottom: 4 }]}>
-                  Understanding Knee Angle
-                </Text>
-                <Text style={ui.muted}>
-                  Smaller knee angles indicate deeper knee bending during the movement.
-                </Text>
-              </View>
-
-              {/* Scientific Integrity Disclaimer */}
-              <View style={[ui.card, styles.disclaimerCard]}>
-                <Text style={[ui.text, styles.disclaimerTitle]}>Scientific Notice</Text>
-                <Text style={[ui.muted, styles.disclaimerText]}>
-                  Injury risk has not been assessed. GaitGuard provides kinematic measurements only and does not provide a medical diagnosis, clinical evaluation, or substitute for a qualified healthcare professional.
-                </Text>
-              </View>
-
-              {/* Frame summary if available */}
-              {outcome.measurement.framesAnalyzed !== undefined && outcome.measurement.framesWithPose !== undefined && (
-                <Text style={[ui.muted, styles.frameStats]}>
-                  Pose tracked in {outcome.measurement.framesWithPose} of {outcome.measurement.framesAnalyzed} analyzed frames.
-                </Text>
+              {reps?.repCount !== null && reps?.repCount !== undefined && (
+                <View style={[s.badge, { backgroundColor: colors.yellow, marginLeft: 8 }]}>
+                  <Ionicons name="repeat" size={18} color={colors.onPastel} />
+                  <Text style={[s.badgeText, { color: colors.onPastel }]}>{reps.repCount} reps</Text>
+                </View>
               )}
             </View>
-          ) : (
-            <View style={styles.section}>
-              <View style={[ui.card, styles.statusCard]}>
-                <Text style={styles.statusLabel}>Analysis Status</Text>
-                <Text style={styles.statusFailedValue}>Analysis Incomplete</Text>
-              </View>
 
-              <View style={[ui.card, styles.errorCard]}>
-                <Text style={[ui.text, styles.errorTitle]}>Notice</Text>
-                <Text style={[ui.text, styles.errorMessage]}>{outcome.errorMessage}</Text>
-              </View>
-
-              <Pressable style={ui.btn} onPress={() => router.back()}>
-                <Text style={ui.btnText}>Retake / Record Again</Text>
-              </Pressable>
+            {/* Knee cards */}
+            <View style={[s.row, { marginTop: space.md }]}>
+              <KneeCard
+                side="Left knee"
+                bg={colors.pink}
+                minAngle={outcome.measurement.leftKneeMinAngle}
+                meanAngle={reps?.leftMeanRepMin ?? null}
+                fallback={reps?.repDetection === 'fallback_overall_min'}
+              />
+              <View style={{ width: 12 }} />
+              <KneeCard
+                side="Right knee"
+                bg={colors.peach}
+                minAngle={outcome.measurement.rightKneeMinAngle}
+                meanAngle={reps?.rightMeanRepMin ?? null}
+                fallback={reps?.repDetection === 'fallback_overall_min'}
+              />
             </View>
-          )
+
+            {/* Per-rep values */}
+            {!!reps && (reps.leftRepMins.length > 0 || reps.rightRepMins.length > 0) && (
+              <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[s.cardTitle, { color: colors.text }]}>Depth per rep</Text>
+                <RepRow label="Left" values={reps.leftRepMins} />
+                <RepRow label="Right" values={reps.rightRepMins} />
+              </View>
+            )}
+
+            {/* Explanation */}
+            <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[s.cardTitle, { color: colors.text }]}>Understanding knee angle</Text>
+              <Text style={{ color: colors.muted, lineHeight: 20 }}>
+                180° is a straight leg. Smaller knee angles indicate deeper knee bending during the movement.
+                “Knee bend” shows how far the knee bent from straight (180° − angle).
+              </Text>
+            </View>
+
+            {/* Member 3's scientific notice */}
+            <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
+                <Text style={[s.cardTitle, { color: colors.text, marginBottom: 0, marginLeft: 6 }]}>Scientific notice</Text>
+              </View>
+              <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19 }}>
+                Injury risk has not been assessed. GaitGuard provides kinematic measurements only and does not provide a
+                medical diagnosis, clinical evaluation, or substitute for a qualified healthcare professional.
+              </Text>
+            </View>
+
+            {outcome.measurement.framesAnalyzed !== undefined && outcome.measurement.framesWithPose !== undefined && (
+              <Text style={{ color: colors.muted, fontSize: 12, textAlign: 'center', marginTop: 4 }}>
+                Pose tracked in {outcome.measurement.framesWithPose} of {outcome.measurement.framesAnalyzed} analyzed frames.
+              </Text>
+            )}
+          </>
+        )}
+
+        {!loading && outcome && !outcome.success && (
+          <>
+            <View style={[s.failCard, { backgroundColor: colors.pink }]}>
+              <Ionicons name="alert-circle" size={40} color={colors.onPastel} />
+              <Text style={[s.failTitle, { color: colors.onPastel }]}>Analysis incomplete</Text>
+              <Text style={{ color: colors.onPastel, textAlign: 'center', marginTop: 6, lineHeight: 20 }}>
+                {outcome.errorMessage}
+              </Text>
+            </View>
+
+            {!!outcome.reason && RETRY_TIPS[outcome.reason] && (
+              <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[s.cardTitle, { color: colors.text }]}>Try this</Text>
+                {RETRY_TIPS[outcome.reason].map(t => (
+                  <View key={t} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                    <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.primary} />
+                    <Text style={{ color: colors.muted, marginLeft: 8, flex: 1 }}>{t}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <AppButton title="Record Again" onPress={() => router.back()} />
+          </>
         )}
       </ScrollView>
 
       {!loading && (
-        <View style={styles.footer}>
-          <Pressable style={ui.btn} onPress={() => router.dismissAll()}>
-            <Text style={ui.btnText}>Back to Home</Text>
-          </Pressable>
+        <View style={{ paddingHorizontal: space.lg, paddingBottom: space.lg }}>
+          <AppButton title="Back to Home" variant={outcome?.success ? 'primary' : 'outline'} onPress={goHome} />
         </View>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  scrollContent: {
-    paddingBottom: 24,
-  },
-  section: {
-    marginTop: 16,
-  },
-  centerContainer: {
-    marginTop: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statusCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
-  },
-  statusLabel: {
-    fontSize: 12,
-    color: colors.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  statusValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.primary,
-    marginTop: 4,
-  },
-  statusFailedValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#f87171',
-    marginTop: 4,
-  },
-  headline: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 4,
-    textTransform: 'capitalize',
-  },
-  angleText: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: colors.text,
-    marginTop: 4,
-  },
-  unitText: {
-    fontSize: 18,
-    fontWeight: '400',
-    color: colors.muted,
-  },
-  unmeasuredText: {
-    marginTop: 6,
-    fontStyle: 'italic',
-  },
-  disclaimerCard: {
-    backgroundColor: '#111c30',
-    borderColor: '#334155',
-    borderWidth: 1,
-  },
-  disclaimerTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#e2e8f0',
-    marginBottom: 4,
-  },
-  disclaimerText: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  frameStats: {
-    fontSize: 12,
-    textAlign: 'center',
-    marginVertical: 8,
-  },
-  errorCard: {
-    borderColor: '#ef4444',
-    borderWidth: 1,
-  },
-  errorTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#f87171',
-    marginBottom: 6,
-  },
-  errorMessage: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.text,
-  },
-  footer: {
-    paddingTop: 8,
-  },
+/* ---------- pieces ---------- */
+function KneeCard({ side, bg, minAngle, meanAngle, fallback }: {
+  side: string; bg: string; minAngle: number | null; meanAngle: number | null; fallback: boolean;
+}) {
+  const { colors } = useTheme();
+  const main = meanAngle ?? minAngle; // prefer the mean of rep minima
+  const label = meanAngle !== null && !fallback ? 'Avg. depth' : 'Deepest point';
+
+  return (
+    <View style={[s.knee, { backgroundColor: bg }]}>
+      <Text style={[s.kneeSide, { color: colors.onPastel }]}>{side}</Text>
+      {main === null ? (
+        <>
+          <Text style={[s.kneeNA, { color: colors.onPastel }]}>Not measured</Text>
+          <Text style={{ color: colors.onPastel, opacity: 0.7, fontSize: 12, marginTop: 4 }}>
+            Leg was not clearly visible in the video
+          </Text>
+        </>
+      ) : (
+        <>
+          <Text style={{ color: colors.onPastel, opacity: 0.7, fontSize: 12, marginTop: 6 }}>{label}</Text>
+          <Text style={[s.kneeValue, { color: colors.onPastel }]}>
+            {fmt(main)}
+            <Text style={{ fontSize: 18 }}>°</Text>
+          </Text>
+          <Text style={{ color: colors.onPastel, fontSize: 12, fontWeight: '700' }}>Knee bend ≈ {fmt(180 - main)}°</Text>
+          {minAngle !== null && meanAngle !== null && !fallback && (
+            <Text style={{ color: colors.onPastel, opacity: 0.7, fontSize: 12, marginTop: 4 }}>Deepest: {fmt(minAngle)}°</Text>
+          )}
+        </>
+      )}
+    </View>
+  );
+}
+
+function RepRow({ label, values }: { label: string; values: number[] }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+      <Text style={{ color: colors.muted, width: 48, fontWeight: '700' }}>{label}</Text>
+      {values.length === 0 ? (
+        <Text style={{ color: colors.muted, fontStyle: 'italic' }}>Not detected</Text>
+      ) : (
+        values.map((v, i) => (
+          <View key={i} style={[s.repChip, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+            <Text style={{ color: colors.text, fontSize: 12, fontWeight: '700' }}>
+              Rep {i + 1}: {fmt(v)}°
+            </Text>
+          </View>
+        ))
+      )}
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  title: { fontSize: 28, fontWeight: '800' },
+  row: { flexDirection: 'row', alignItems: 'stretch' },
+  loading: { alignItems: 'center', padding: space.xl, borderRadius: radius.lg, marginTop: space.md },
+  loadingTitle: { fontSize: 18, fontWeight: '800', marginTop: space.md },
+  badge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.pill },
+  badgeText: { fontWeight: '800', marginLeft: 6 },
+  knee: { flex: 1, borderRadius: radius.lg, padding: space.md, minHeight: 150 },
+  kneeSide: { fontWeight: '800', fontSize: 14 },
+  kneeValue: { fontSize: 38, fontWeight: '900', marginVertical: 2 },
+  kneeNA: { fontSize: 20, fontWeight: '800', marginTop: 14 },
+  card: { borderWidth: 1.5, borderRadius: radius.md, padding: space.md, marginTop: space.md },
+  cardTitle: { fontSize: 15, fontWeight: '800', marginBottom: 6 },
+  repChip: { borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4, marginRight: 6, marginTop: 4 },
+  failCard: { alignItems: 'center', padding: space.lg, borderRadius: radius.lg },
+  failTitle: { fontSize: 20, fontWeight: '800', marginTop: 8 },
 });

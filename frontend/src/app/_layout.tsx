@@ -40,7 +40,7 @@ function RootStack() {
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
         <Stack.Screen name="help" options={{ title: 'Help & Support' }} />
         {/* Analysis flow (existing screens) */}
-        <Stack.Screen name="select-movement" options={{ title: 'Choose Movement' }} />
+        
         <Stack.Screen name="capture" options={{ title: 'Record or Upload' }} />
         <Stack.Screen name="record" options={{ headerShown: false }} />
         <Stack.Screen name="preview" options={{ title: 'Preview' }} />

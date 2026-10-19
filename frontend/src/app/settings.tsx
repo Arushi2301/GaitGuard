@@ -173,26 +173,7 @@ export default function Settings() {
           right={toggle(settings.notifications, v => updateSettings({ notifications: v }))} />
       </Section>
 
-      <Section title="RECORDING">
-        <Row icon="timer-outline" iconBg={colors.peach} label="Max duration"
-          right={
-            <Segmented
-              options={[{ label: '10s', value: 10 }, { label: '15s', value: 15 }]}
-              value={settings.maxRecordSeconds}
-              onChange={v => updateSettings({ maxRecordSeconds: v as 10 | 15 })}
-            />
-          }
-        />
-        <Row icon="camera-reverse-outline" iconBg={colors.lavender} label="Camera" last
-          right={
-            <Segmented
-              options={[{ label: 'Back', value: 'back' }, { label: 'Front', value: 'front' }]}
-              value={settings.cameraFacing}
-              onChange={v => updateSettings({ cameraFacing: v as 'back' | 'front' })}
-            />
-          }
-        />
-      </Section>
+      
 
       <Section title="SERVER">
         <View style={{ padding: space.md }}>
