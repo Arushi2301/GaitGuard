@@ -11,6 +11,7 @@ MODEL_PATH = Path(__file__).parent / "models" / "pose_landmarker_lite.task"
 FRAME_STEP = 2          # analyze every 2nd frame
 MAX_SECONDS = 15        # ignore anything after the first 15 s of video
 MIN_VISIBILITY = 0.5    # landmark must be at least this "visible" to be trusted
+MAX_SIDE = 960          # downscale frames so the longer side is at most this many pixels
 
 # MediaPipe landmark indices: (hip, knee, ankle)
 LEFT_LEG = (23, 25, 27)
@@ -25,6 +26,17 @@ def _knee_angle(landmarks, leg, width, height):
     # Landmarks are normalized (0..1); convert to pixels so the angle isn't distorted
     hip, knee, ankle = [(p.x * width, p.y * height) for p in points]
     return joint_angle(hip, knee, ankle)
+
+
+def _downscale(frame):
+    """Shrink a frame so its longer side is at most MAX_SIDE, keeping the aspect ratio."""
+    height, width = frame.shape[:2]
+    longest = max(height, width)
+    if longest <= MAX_SIDE:
+        return frame
+    scale = MAX_SIDE / longest
+    new_size = (max(1, round(width * scale)), max(1, round(height * scale)))
+    return cv2.resize(frame, new_size, interpolation=cv2.INTER_AREA)
 
 
 def analyze_video(path):
@@ -58,7 +70,8 @@ def analyze_video(path):
                     break
 
                 if frame_idx % FRAME_STEP == 0:
-                    height, width = frame.shape[:2]
+                    frame = _downscale(frame)
+                    height, width = frame.shape[:2]  # resized size, used for the angle maths
                     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # OpenCV gives BGR, MediaPipe wants RGB
                     image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
                     timestamp_ms = int(frame_idx * 1000 / fps)  # must strictly increase
