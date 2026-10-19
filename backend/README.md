@@ -2,6 +2,39 @@
 
 A small Python HTTP API. It takes a phone video of an athlete, runs MediaPipe pose estimation, and returns the minimum (deepest) knee flexion angle for each leg.
 
+## Backend Status
+_Last updated: 2026-10-19_
+
+### ✅ Done
+- FastAPI server with `GET /health` and `POST /analyze` (CORS open, temp file always cleaned up)
+- MediaPipe PoseLandmarker pose estimation and per-leg knee angle (`joint_angle()`), minimum angle per leg
+- Stable error JSON: `cannot_open_video`, `no_pose_detected`, `legs_not_visible`, `processing_failed` (HTTP 200, never a 500)
+- Video capture always released, so the temp file can be deleted on Windows
+- Real-video test: `test_local.py` and `POST /analyze` agree on a 4K side-view squat (left ~59°, right ~66°)
+- Frontend contract check: real `/analyze` responses (ok and `cannot_open_video`) accepted by the frontend's `screening.ts` validator
+- Frame downscaling to max 960px: processing time ~36 s → ~14 s on the 4K sample, angles unchanged within 0.3°
+- Per-rep results: rep detection (`reps.py`: gap fill, smoothing, dip detection, raw per-rep minima, mean) and 6 new JSON fields; sample video gives 2 reps, matching the 2 squats visible in the first 15 s
+- Automated pytest suite in `tests/` (39 tests: angles, API contract, every error code, occlusion → null, rep detection on synthetic series); output in `evidence/pytest_results.txt`
+- Left/right verification: annotated deepest-squat frame (`evidence/left_right_check.png`) and frame stats (`evidence/frame_stats.txt`), made by `scripts/left_right_check.py`
+- [TESTING.md](TESTING.md): how to run the tests, test-case table, sample results, left/right check, frontend contract check, limitations
+- README: setup, JSON contract, phone-testing steps, teammate notes
+
+### 🚧 In progress
+- Nothing active right now
+
+### ⏳ Not done yet
+- Live test from a phone through the app
+- Database (only if the team picks the database route)
+
+### ⚠️ Known limitations
+- Only knee angle is measured; `movement` is echoed back but not used
+- First 15 s of video only
+- Single camera, no depth: angles come from 2D positions, so camera angle and distance affect them
+- Far leg may be null in side view (occlusion); a rep cut off exactly at a visibility gap is missed on that leg (sample video: left leg 1 rep, right leg 2)
+- Rep detection assumes a 30°+ dip and at least 1 s between reps; fast or shallow reps fall back to the overall minimum
+- API URL depends on the laptop's LAN IP (hardcoded in `frontend/src/constants/config.ts`)
+- Angle convention: interior angle (180° = straight); clinical knee flexion = 180 − angle
+
 ## Setup (Windows / PowerShell)
 
 > **Python version:** MediaPipe does not support Python 3.14. Use Python 3.11 via the `py` launcher.
@@ -24,6 +57,14 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8000
 
 - `GET http://localhost:8000/health` -> `{"status":"ok"}`
 - Interactive docs: `http://localhost:8000/docs`
+
+## Run the automated tests
+
+```powershell
+.\venv\Scripts\python.exe -m pytest -v
+```
+
+Details, the test-case table and the evidence are in [TESTING.md](TESTING.md).
 
 ## Test without the server
 
@@ -76,11 +117,26 @@ Success:
   "left_knee_min_angle": 92.4,
   "right_knee_min_angle": 95.1,
   "frames_analyzed": 120,
-  "frames_with_pose": 112
+  "frames_with_pose": 112,
+  "left_knee_rep_min_angles": [92.4, 94.0],
+  "right_knee_rep_min_angles": [95.1, 96.3],
+  "left_knee_mean_rep_min_angle": 93.2,
+  "right_knee_mean_rep_min_angle": 95.7,
+  "rep_count": 2,
+  "rep_detection": "ok"
 }
 ```
 
 Either `left_knee_min_angle` or `right_knee_min_angle` may be `null` if that leg was never clearly visible. A smaller angle means a deeper knee bend.
+
+The first eight fields are the original contract and keep their meaning (`*_knee_min_angle` is still the overall minimum over the whole video). The last six were added for per-rep results; existing clients can ignore them (the frontend's `screening.ts` reads only named fields, so extra fields do not make it reject the response).
+
+| field | meaning |
+| --- | --- |
+| `left_knee_rep_min_angles`, `right_knee_rep_min_angles` | deepest angle of each detected rep, in time order, rounded to 1 decimal; `[]` if no reps were found or the leg was never visible |
+| `left_knee_mean_rep_min_angle`, `right_knee_mean_rep_min_angle` | mean of that leg's per-rep minima; if no reps were found it falls back to the overall minimum; `null` if the leg was never visible |
+| `rep_count` | number of reps detected on the leg that was visible in more frames (ties go to the left) |
+| `rep_detection` | `"ok"`, or `"fallback_overall_min"` if any leg that was measured had no reps detected (check its `*_rep_min_angles` for which one) |
 
 Failure (returned with HTTP 200, never a 500):
 
@@ -109,9 +165,16 @@ Things to expect:
 ## How it works
 
 1. OpenCV reads the video (every 2nd frame, first 15 s only).
-2. Each frame is converted BGR -> RGB and given to MediaPipe PoseLandmarker (Tasks API, video mode).
+2. Each frame is shrunk so its longer side is at most 960 px (aspect ratio kept), converted BGR -> RGB and given to MediaPipe PoseLandmarker (Tasks API, video mode).
 3. For each leg, hip/knee/ankle landmarks are converted to pixels and `joint_angle()` computes the angle at the knee. Frames where any of the three points has visibility <= 0.5 are skipped for that leg.
-4. The minimum angle per leg is returned.
+4. The overall minimum angle per leg is returned (`left_knee_min_angle`, `right_knee_min_angle`).
+5. Reps are found per leg in `reps.py`, from the series of per-frame angles (`None` where the leg wasn't visible):
+   1. Gaps of up to 3 samples are filled by linear interpolation; longer gaps stay as breaks.
+   2. The series is smoothed with a centered moving average (5 samples).
+   3. Dips are found with `scipy.signal.find_peaks` on the negated signal: each dip must be at least 30° below the surrounding standing level (prominence) and dips must be at least 1 s apart. Each unbroken stretch of the series is searched on its own.
+   4. For each dip, the minimum of the **raw** (unsmoothed) angles around it is taken, so smoothing can't hide the real depth. A rep's window runs from halfway to the previous dip to halfway to the next.
+   5. The mean of those per-rep minima is reported. If no reps are found, the overall minimum is used instead and `rep_detection` says `"fallback_overall_min"`.
+   - A dip that sits exactly at the edge of a visibility gap (the leg disappears at the bottom of the squat) can't be detected, because a dip needs samples on both sides. That rep is missed on that leg; the overall minimum still includes it.
 
 ## Notes for teammates
 

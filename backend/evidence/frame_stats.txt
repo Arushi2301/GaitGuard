@@ -1,0 +1,8 @@
+video: sample.mp4  size=4096x2160  fps=25.0  frames=743  duration=29.72s
+frames_analyzed=188  frames_with_pose=188
+expected ~ min(duration, 15s) x fps / 2 = 187.5
+mean visibility (hip/knee/ankle) left=0.74 right=0.98
+frames with null angle: left=53 right=0 (of 188 frames with pose)
+deepest frame idx=72 (t=2.88s)  left=59.22998336168731  right=67.57606752903926
+nose x=0.41 vs mid-hip x=0.33 -> person faces image-right
+saved D:\GaitGuard\backend\evidence\left_right_check.png

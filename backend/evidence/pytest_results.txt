@@ -1,0 +1,55 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.1.1, pluggy-1.7.0 -- D:\GaitGuard\backend\venv\Scripts\python.exe
+rootdir: D:\GaitGuard\backend
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.15.1
+collecting ... collected 39 items
+
+tests/test_angles.py::test_right_angle PASSED                            [  2%]
+tests/test_angles.py::test_straight_line_is_180 PASSED                   [  5%]
+tests/test_angles.py::test_coincident_points_return_zero_without_crashing PASSED [  7%]
+tests/test_angles.py::test_known_60_degree_angle PASSED                  [ 10%]
+tests/test_angles.py::test_angle_is_independent_of_segment_length PASSED [ 12%]
+tests/test_api.py::test_health PASSED                                    [ 15%]
+tests/test_api.py::test_valid_video_returns_full_contract PASSED         [ 17%]
+tests/test_api.py::test_valid_video_rep_fields PASSED                    [ 20%]
+tests/test_api.py::test_sample_video_has_two_squats PASSED               [ 23%]
+tests/test_api.py::test_valid_video_keys_are_in_documented_order PASSED  [ 25%]
+tests/test_api.py::test_movement_defaults_to_squat PASSED                [ 28%]
+tests/test_api.py::test_custom_movement_is_echoed PASSED                 [ 30%]
+tests/test_api.py::test_black_video_gives_no_pose_detected PASSED        [ 33%]
+tests/test_api.py::test_upper_body_only_video_gives_legs_not_visible PASSED [ 35%]
+tests/test_api.py::test_random_bytes_give_cannot_open_video PASSED       [ 38%]
+tests/test_api.py::test_unexpected_exception_gives_processing_failed PASSED [ 41%]
+tests/test_api.py::test_missing_file_field_returns_422 PASSED            [ 43%]
+tests/test_api.py::test_temp_file_is_removed_after_request PASSED        [ 46%]
+tests/test_pose.py::test_occluded_leg_is_null_not_zero PASSED            [ 48%]
+tests/test_pose.py::test_constant_angle_falls_back_to_overall_minimum PASSED [ 51%]
+tests/test_pose.py::test_both_legs_visible_gives_two_angles PASSED       [ 53%]
+tests/test_pose.py::test_downscale_keeps_aspect_ratio_and_caps_longer_side PASSED [ 56%]
+tests/test_pose.py::test_downscale_leaves_small_frames_alone PASSED      [ 58%]
+tests/test_reps.py::test_short_gap_is_filled_linearly PASSED             [ 61%]
+tests/test_reps.py::test_long_gap_is_left_as_a_break PASSED              [ 64%]
+tests/test_reps.py::test_gaps_at_the_ends_are_not_filled PASSED          [ 66%]
+tests/test_reps.py::test_smooth_is_a_centered_window_of_five PASSED      [ 69%]
+tests/test_reps.py::test_smooth_keeps_none PASSED                        [ 71%]
+tests/test_reps.py::test_three_clean_dips_give_three_reps_with_correct_minima_and_mean PASSED [ 74%]
+tests/test_reps.py::test_noisy_series_still_gives_three_reps PASSED      [ 76%]
+tests/test_reps.py::test_rep_minimum_comes_from_raw_not_smoothed_values PASSED [ 79%]
+tests/test_reps.py::test_dips_less_than_a_second_apart_count_as_one_rep PASSED [ 82%]
+tests/test_reps.py::test_shallow_wobble_below_prominence_is_not_a_rep PASSED [ 84%]
+tests/test_reps.py::test_no_dips_falls_back_to_overall_minimum PASSED    [ 87%]
+tests/test_reps.py::test_leg_that_is_never_visible_has_no_numbers PASSED [ 89%]
+tests/test_reps.py::test_short_gaps_inside_a_dip_do_not_break_the_rep PASSED [ 92%]
+tests/test_reps.py::test_long_gap_between_reps_keeps_both_reps PASSED    [ 94%]
+tests/test_reps.py::test_dip_cut_off_at_a_gap_edge_is_not_counted PASSED [ 97%]
+tests/test_reps.py::test_all_values_are_rounded_to_one_decimal PASSED    [100%]
+
+============================== warnings summary ===============================
+venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\GaitGuard\backend\venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 39 passed, 1 warning in 30.83s ========================
