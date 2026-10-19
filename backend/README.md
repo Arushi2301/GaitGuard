@@ -2,6 +2,36 @@
 
 A small Python HTTP API. It takes a phone video of an athlete, runs MediaPipe pose estimation, and returns the minimum (deepest) knee flexion angle for each leg.
 
+## Backend Status
+_Last updated: 2026-10-19_
+
+### ✅ Done
+- FastAPI server with `GET /health` and `POST /analyze` (CORS open, temp file always cleaned up)
+- MediaPipe PoseLandmarker pose estimation and per-leg knee angle (`joint_angle()`), minimum angle per leg
+- Stable error JSON: `cannot_open_video`, `no_pose_detected`, `legs_not_visible`, `processing_failed` (HTTP 200, never a 500)
+- Video capture always released, so the temp file can be deleted on Windows
+- Real-video test: `test_local.py` and `POST /analyze` agree on a 4K side-view squat (left ~59°, right ~66°)
+- Frontend contract check: real `/analyze` responses (ok and `cannot_open_video`) accepted by the frontend's `screening.ts` validator
+- Frame downscaling to max 960px: processing time ~36 s → ~14 s on the 4K sample, angles unchanged within 0.3°
+- README: setup, JSON contract, phone-testing steps, teammate notes
+
+### 🚧 In progress
+- Nothing active right now
+
+### ⏳ Not done yet
+- Automated pytest suite
+- Left/right verification evidence
+- TESTING.md
+- Live test from a phone through the app
+- Database (only if the team picks the database route)
+
+### ⚠️ Known limitations
+- Only knee angle is measured; `movement` is echoed back but not used
+- First 15 s of video only
+- Far leg may be null in side view (occlusion)
+- API URL depends on the laptop's LAN IP (hardcoded in `frontend/src/constants/config.ts`)
+- Angle convention: interior angle (180° = straight); clinical knee flexion = 180 − angle
+
 ## Setup (Windows / PowerShell)
 
 > **Python version:** MediaPipe does not support Python 3.14. Use Python 3.11 via the `py` launcher.
@@ -109,7 +139,7 @@ Things to expect:
 ## How it works
 
 1. OpenCV reads the video (every 2nd frame, first 15 s only).
-2. Each frame is converted BGR -> RGB and given to MediaPipe PoseLandmarker (Tasks API, video mode).
+2. Each frame is shrunk so its longer side is at most 960 px (aspect ratio kept), converted BGR -> RGB and given to MediaPipe PoseLandmarker (Tasks API, video mode).
 3. For each leg, hip/knee/ankle landmarks are converted to pixels and `joint_angle()` computes the angle at the knee. Frames where any of the three points has visibility <= 0.5 are skipped for that leg.
 4. The minimum angle per leg is returned.
 
