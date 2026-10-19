@@ -13,13 +13,13 @@ _Last updated: 2026-10-19_
 - Real-video test: `test_local.py` and `POST /analyze` agree on a 4K side-view squat (left ~59°, right ~66°)
 - Frontend contract check: real `/analyze` responses (ok and `cannot_open_video`) accepted by the frontend's `screening.ts` validator
 - Frame downscaling to max 960px: processing time ~36 s → ~14 s on the 4K sample, angles unchanged within 0.3°
+- Automated pytest suite in `tests/` (20 tests: angles, API contract, every error code, occlusion → null); output in `evidence/pytest_results.txt`
 - README: setup, JSON contract, phone-testing steps, teammate notes
 
 ### 🚧 In progress
 - Nothing active right now
 
 ### ⏳ Not done yet
-- Automated pytest suite
 - Left/right verification evidence
 - TESTING.md
 - Live test from a phone through the app
