@@ -46,7 +46,9 @@
         {
           "photosPermission": "GaitGuard needs access to your videos to upload a movement clip."
         }
-      ]
+      ],
+      "expo-audio",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,
