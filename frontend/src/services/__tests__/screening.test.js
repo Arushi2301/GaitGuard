@@ -9,12 +9,12 @@ const frontendRoot = path.resolve(__dirname, '../../..');
 const distFile = path.join(frontendRoot, 'dist', 'services', 'screening.js');
 const srcFile = path.resolve(__dirname, '../screening.ts');
 
-if (!fs.existsSync(distFile) || fs.statSync(srcFile).mtimeMs > fs.statSync(distFile).mtimeMs) {
+if (!fs.existsSync(distFile) || fs.statSync(srcFile).mtimeMs >= fs.statSync(distFile).mtimeMs) {
   const tscCmd = process.platform === 'win32'
     ? path.join(frontendRoot, 'node_modules', '.bin', 'tsc.cmd')
     : path.join(frontendRoot, 'node_modules', '.bin', 'tsc');
 
-  execSync(`"${tscCmd}" src/services/screening.ts --outDir ./dist --module commonjs --target es2020 --ignoreConfig`, {
+  execSync(`"${tscCmd}" src/services/screening.ts --outDir ./dist --rootDir ./src --module commonjs --target es2020 --ignoreConfig`, {
     cwd: frontendRoot,
     stdio: 'ignore',
   });
@@ -30,6 +30,12 @@ const {
   NETWORK_ERROR_MESSAGE,
   TIMEOUT_ERROR_MESSAGE,
   MALFORMED_ERROR_MESSAGE,
+  SCIENTIFIC_ASSESSMENT_DISCLAIMER,
+  toClinicalFlexion,
+  assessSquatDepth,
+  assessBilateralDifference,
+  assessRepetitionVariation,
+  assessSquatMovement,
 } = require(distFile);
 
 describe('Member 3 — Screening Logic & Measurement Validation', () => {
@@ -522,6 +528,281 @@ describe('Member 3 — Screening Logic & Measurement Validation', () => {
       assert.strictEqual(isValidFrameCount({}), false);
       assert.strictEqual(isValidFrameCount([]), false);
       assert.strictEqual(isValidFrameCount(true), false);
+    });
+  });
+
+  describe('Helper: toClinicalFlexion', () => {
+    it('correctly converts valid interior angles to clinical flexion angles', () => {
+      assert.strictEqual(toClinicalFlexion(180), 0);
+      assert.strictEqual(toClinicalFlexion(90), 90);
+      assert.strictEqual(toClinicalFlexion(70), 110);
+      assert.strictEqual(toClinicalFlexion(0), 180);
+      assert.strictEqual(toClinicalFlexion(65.8), 114.2);
+      assert.strictEqual(toClinicalFlexion(59.2), 120.8);
+    });
+
+    it('returns null for missing, non-finite, or out-of-range angles', () => {
+      assert.strictEqual(toClinicalFlexion(null), null);
+      assert.strictEqual(toClinicalFlexion(undefined), null);
+      assert.strictEqual(toClinicalFlexion(-0.1), null);
+      assert.strictEqual(toClinicalFlexion(180.1), null);
+      assert.strictEqual(toClinicalFlexion(NaN), null);
+      assert.strictEqual(toClinicalFlexion(Infinity), null);
+      assert.strictEqual(toClinicalFlexion('90'), null);
+    });
+  });
+
+  describe('10. Continuous squat depth assessment (assessSquatDepth)', () => {
+    it('calculates continuous interior and clinical flexion angles without categorical labels', () => {
+      // 0.0 interior -> 180.0 flexion
+      const zero = assessSquatDepth(0.0);
+      assert.strictEqual(zero.interiorAngle, 0.0);
+      assert.strictEqual(zero.clinicalFlexionAngle, 180.0);
+      assert.strictEqual(zero.category, undefined);
+      assert.strictEqual(zero.categoryLabel, undefined);
+      assert.ok(zero.description.includes('180.0° (interior angle 0.0°)'));
+
+      // 65.8 interior -> 114.2 flexion
+      const angle1 = assessSquatDepth(65.8);
+      assert.strictEqual(angle1.interiorAngle, 65.8);
+      assert.strictEqual(angle1.clinicalFlexionAngle, 114.2);
+      assert.strictEqual(angle1.category, undefined);
+      assert.strictEqual(angle1.categoryLabel, undefined);
+      assert.ok(angle1.description.includes('114.2° (interior angle 65.8°)'));
+
+      // 70.0 interior -> 110.0 flexion
+      const angle2 = assessSquatDepth(70.0);
+      assert.strictEqual(angle2.interiorAngle, 70.0);
+      assert.strictEqual(angle2.clinicalFlexionAngle, 110.0);
+      assert.strictEqual(angle2.category, undefined);
+
+      // 90.0 interior -> 90.0 flexion
+      const angle3 = assessSquatDepth(90.0);
+      assert.strictEqual(angle3.interiorAngle, 90.0);
+      assert.strictEqual(angle3.clinicalFlexionAngle, 90.0);
+      assert.strictEqual(angle3.category, undefined);
+
+      // 120.0 interior -> 60.0 flexion
+      const angle4 = assessSquatDepth(120.0);
+      assert.strictEqual(angle4.interiorAngle, 120.0);
+      assert.strictEqual(angle4.clinicalFlexionAngle, 60.0);
+      assert.strictEqual(angle4.category, undefined);
+
+      // 180.0 interior -> 0.0 flexion
+      const angle5 = assessSquatDepth(180.0);
+      assert.strictEqual(angle5.interiorAngle, 180.0);
+      assert.strictEqual(angle5.clinicalFlexionAngle, 0.0);
+      assert.strictEqual(angle5.category, undefined);
+
+      // Ensure no evaluative/categorical words in descriptions
+      [zero, angle1, angle2, angle3, angle4, angle5].forEach(res => {
+        const desc = res.description.toLowerCase();
+        assert.ok(!desc.includes('deep'));
+        assert.ok(!desc.includes('parallel'));
+        assert.ok(!desc.includes('half'));
+        assert.ok(!desc.includes('shallow'));
+        assert.ok(!desc.includes('good'));
+        assert.ok(!desc.includes('bad'));
+        assert.ok(!desc.includes('risk'));
+      });
+    });
+
+    it('returns null for missing or invalid angles without defaulting to 0', () => {
+      assert.strictEqual(assessSquatDepth(null), null);
+      assert.strictEqual(assessSquatDepth(undefined), null);
+      assert.strictEqual(assessSquatDepth(-5), null);
+      assert.strictEqual(assessSquatDepth(185), null);
+      assert.strictEqual(assessSquatDepth(NaN), null);
+      assert.strictEqual(assessSquatDepth('70'), null);
+    });
+  });
+
+  describe('11. Bilateral knee angle difference (assessBilateralDifference)', () => {
+    it('assesses identical depths with deeperSide equal and 0.0 degree difference', () => {
+      const res = assessBilateralDifference(85.0, 85.0);
+      assert.strictEqual(res.evaluated, true);
+      assert.strictEqual(res.absoluteDifference, 0.0);
+      assert.strictEqual(res.deeperSide, 'equal');
+      assert.ok(res.description.includes('identical'));
+    });
+    it('does not call rounded near-equal measurements identical', () => {
+      const res = assessBilateralDifference(85.0, 85.01);
+      assert.strictEqual(res.evaluated, true);
+      assert.strictEqual(res.absoluteDifference, 0.0);
+      assert.strictEqual(res.deeperSide, 'left');
+      assert.ok(!res.description.includes('identical'));
+      assert.ok(res.description.includes('rounds to 0.0°'));
+    });
+
+    it('correctly identifies left leg deeper when left angle is smaller', () => {
+      const res = assessBilateralDifference(65.0, 75.0);
+      assert.strictEqual(res.evaluated, true);
+      assert.strictEqual(res.absoluteDifference, 10.0);
+      assert.strictEqual(res.deeperSide, 'left');
+      assert.ok(res.description.includes('Left knee bent 10.0° deeper'));
+    });
+
+    it('correctly identifies right leg deeper when right angle is smaller', () => {
+      const res = assessBilateralDifference(85.0, 77.5);
+      assert.strictEqual(res.evaluated, true);
+      assert.strictEqual(res.absoluteDifference, 7.5);
+      assert.strictEqual(res.deeperSide, 'right');
+      assert.ok(res.description.includes('Right knee bent 7.5° deeper'));
+    });
+
+    it('marks comparison unavailable when either leg is null or invalid', () => {
+      const nullLeft = assessBilateralDifference(null, 80.0);
+      assert.strictEqual(nullLeft.evaluated, false);
+      assert.strictEqual(nullLeft.absoluteDifference, null);
+      assert.strictEqual(nullLeft.deeperSide, null);
+
+      const nullRight = assessBilateralDifference(80.0, null);
+      assert.strictEqual(nullRight.evaluated, false);
+      assert.strictEqual(nullRight.absoluteDifference, null);
+
+      const bothNull = assessBilateralDifference(null, null);
+      assert.strictEqual(bothNull.evaluated, false);
+
+      const invalid = assessBilateralDifference(80.0, -10);
+      assert.strictEqual(invalid.evaluated, false);
+    });
+
+    it('does not contain clinical labels like normal, abnormal, balanced, or unbalanced', () => {
+      const diff1 = assessBilateralDifference(65.0, 85.0);
+      const text = diff1.description.toLowerCase();
+      assert.ok(!text.includes('abnormal'));
+      assert.ok(!text.includes('normal'));
+      assert.ok(!text.includes('unbalanced'));
+      assert.ok(!text.includes('balanced'));
+      assert.ok(!text.includes('risk'));
+    });
+  });
+
+  describe('12. Repetition depth variation (assessRepetitionVariation)', () => {
+    it('calculates observed spread across valid repetitions', () => {
+      const res = assessRepetitionVariation([65.0, 70.0, 68.5], 'ok');
+      assert.strictEqual(res.evaluated, true);
+      assert.strictEqual(res.repCount, 3);
+      assert.strictEqual(res.spreadDegrees, 5.0);
+      assert.strictEqual(res.minRepAngle, 65.0);
+      assert.strictEqual(res.maxRepAngle, 70.0);
+      assert.ok(res.description.includes('5.0° across 3 segmented reps'));
+    });
+
+    it('handles identical repetition angles with 0.0 degree spread', () => {
+      const res = assessRepetitionVariation([80.0, 80.0], 'ok');
+      assert.strictEqual(res.evaluated, true);
+      assert.strictEqual(res.repCount, 2);
+      assert.strictEqual(res.spreadDegrees, 0.0);
+    });
+
+    it('marks consistency unassessed when fewer than 2 repetitions are available', () => {
+      const single = assessRepetitionVariation([75.0], 'ok');
+      assert.strictEqual(single.evaluated, false);
+      assert.strictEqual(single.spreadDegrees, null);
+      assert.strictEqual(single.repCount, 1);
+      assert.ok(single.description.includes('fewer than 2'));
+
+      const empty = assessRepetitionVariation([], 'ok');
+      assert.strictEqual(empty.evaluated, false);
+      assert.strictEqual(empty.spreadDegrees, null);
+    });
+
+    it('marks consistency unassessed when fallback_overall_min is reported', () => {
+      const fallback = assessRepetitionVariation([65.0, 70.0], 'fallback_overall_min');
+      assert.strictEqual(fallback.evaluated, false);
+      assert.strictEqual(fallback.spreadDegrees, null);
+      assert.ok(fallback.description.includes('fallback'));
+    });
+
+    it('does not emit arbitrary consistency labels like consistent or inconsistent', () => {
+      const res = assessRepetitionVariation([60.0, 75.0], 'ok');
+      const text = res.description.toLowerCase();
+      assert.ok(!text.includes('consistent'));
+      assert.ok(!text.includes('inconsistent'));
+      assert.ok(!text.includes('good'));
+      assert.ok(!text.includes('bad'));
+    });
+  });
+
+  describe('13. Orchestration & movement scoping (assessSquatMovement)', () => {
+    it('assesses squat movement completely with primary leg selection and asymmetry', () => {
+      const measurement = {
+        movement: 'squat',
+        metric: 'knee_flexion_angle',
+        unit: 'degrees',
+        leftKneeMinAngle: 59.2,
+        rightKneeMinAngle: 65.8,
+        hasLeftAngle: true,
+        hasRightAngle: true,
+      };
+      const reps = {
+        leftRepMins: [59.2],
+        rightRepMins: [67.6, 65.8],
+        repDetection: 'ok',
+      };
+
+      const assessment = assessSquatMovement(measurement, reps);
+      assert.ok(assessment !== null);
+      assert.strictEqual(assessment.movement, 'squat');
+      assert.strictEqual(assessment.leftLeg.interiorAngle, 59.2);
+      assert.strictEqual(assessment.leftLeg.clinicalFlexionAngle, 120.8);
+      assert.strictEqual(assessment.leftLeg.category, undefined);
+      assert.strictEqual(assessment.rightLeg.interiorAngle, 65.8);
+      assert.strictEqual(assessment.rightLeg.clinicalFlexionAngle, 114.2);
+      assert.strictEqual(assessment.rightLeg.category, undefined);
+      // Left leg is deeper (59.2 < 65.8), so it is selected as primary
+      assert.strictEqual(assessment.primaryLeg.interiorAngle, 59.2);
+      assert.strictEqual(assessment.asymmetry.evaluated, true);
+      assert.strictEqual(assessment.asymmetry.absoluteDifference, 6.6);
+      assert.strictEqual(assessment.asymmetry.deeperSide, 'left');
+      assert.ok(assessment.disclaimer.includes(SCIENTIFIC_ASSESSMENT_DISCLAIMER));
+    });
+
+    it('handles single visible leg safely without evaluating asymmetry', () => {
+      const measurement = {
+        movement: 'squat',
+        metric: 'knee_flexion_angle',
+        unit: 'degrees',
+        leftKneeMinAngle: null,
+        rightKneeMinAngle: 85.0,
+        hasLeftAngle: false,
+        hasRightAngle: true,
+      };
+
+      const assessment = assessSquatMovement(measurement);
+      assert.ok(assessment !== null);
+      assert.strictEqual(assessment.leftLeg, null);
+      assert.strictEqual(assessment.rightLeg.interiorAngle, 85.0);
+      assert.strictEqual(assessment.rightLeg.clinicalFlexionAngle, 95.0);
+      assert.strictEqual(assessment.rightLeg.category, undefined);
+      assert.strictEqual(assessment.primaryLeg.interiorAngle, 85.0);
+      assert.strictEqual(assessment.asymmetry.evaluated, false);
+      assert.strictEqual(assessment.asymmetry.absoluteDifference, null);
+    });
+
+    it('strictly returns null for non-squat movements', () => {
+      const walkMeasurement = {
+        movement: 'walk',
+        metric: 'knee_flexion_angle',
+        unit: 'degrees',
+        leftKneeMinAngle: 90.0,
+        rightKneeMinAngle: 90.0,
+        hasLeftAngle: true,
+        hasRightAngle: true,
+      };
+      assert.strictEqual(assessSquatMovement(walkMeasurement), null);
+
+      const jumpMeasurement = {
+        movement: 'drop-jump',
+        metric: 'knee_flexion_angle',
+        unit: 'degrees',
+        leftKneeMinAngle: 80.0,
+        rightKneeMinAngle: 80.0,
+        hasLeftAngle: true,
+        hasRightAngle: true,
+      };
+      assert.strictEqual(assessSquatMovement(jumpMeasurement), null);
     });
   });
 });

@@ -8,7 +8,7 @@ import { analyzeVideo } from '../services/analysis';
 import { useAuth } from '../services/auth';
 import { addHistory, parseRepStats, RepStats } from '../services/history';
 import { useNotifications } from '../services/notifications';
-import { processAnalysisResult, ScreeningOutcome } from '../services/screening';
+import { assessSquatMovement, processAnalysisResult, ScreeningOutcome } from '../services/screening';
 import { getVideoUri } from '../services/videoStore';
 import { radius, space } from '../theme/palette';
 import { useTheme } from '../theme/ThemeContext';
@@ -39,6 +39,11 @@ export default function Result() {
   const movementDetails = getMovement(movement);
   const movementName =
     movementDetails?.name ?? (movement ? movement.charAt(0).toUpperCase() + movement.slice(1) : 'Movement Screening');
+
+  const assessment =
+    outcome?.success && outcome.measurement.movement === 'squat'
+      ? assessSquatMovement(outcome.measurement, reps)
+      : null;
 
   /* ---------- Member 3's analysis flow (unchanged logic) ---------- */
   useEffect(() => {
@@ -179,6 +184,57 @@ export default function Result() {
               </View>
             )}
 
+            {/* Screening Assessment (Squat only) */}
+            {assessment && (
+              <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Ionicons name="analytics-outline" size={18} color={colors.primary} />
+                  <Text style={[s.cardTitle, { color: colors.text, marginBottom: 0, marginLeft: 6 }]}>
+                    Screening Assessment
+                  </Text>
+                </View>
+
+                {assessment.primaryLeg && (
+                  <View style={{ marginBottom: 10 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 2 }}>
+                      Observed Squat Depth
+                    </Text>
+                    <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 18 }}>
+                      {assessment.primaryLeg.description}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.muted, opacity: 0.8, marginTop: 2 }}>
+                      Squat biomechanics research considers thigh position as well as joint angles. Knee angle alone cannot establish whether the thighs are parallel for every person.
+                    </Text>
+                  </View>
+                )}
+
+                <View style={{ marginBottom: 10 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 2 }}>
+                    Left–Right Difference
+                  </Text>
+                  <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 18 }}>
+                    {assessment.asymmetry.description}
+                  </Text>
+                  {assessment.asymmetry.evaluated && (
+                    <Text style={{ fontSize: 11, color: colors.muted, opacity: 0.8, marginTop: 2 }}>
+                      Note: Single-camera measurements can be affected by perspective and occlusion; interpret small left–right differences cautiously.
+                    </Text>
+                  )}
+                </View>
+
+                {reps && (reps.leftRepMins.length > 0 || reps.rightRepMins.length > 0 || reps.repDetection === 'fallback_overall_min') && (
+                  <View>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 2 }}>
+                      Repetition Variation
+                    </Text>
+                    <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 18 }}>
+                      {assessment.repetitionVariation.description}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
             {/* Explanation */}
             <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[s.cardTitle, { color: colors.text }]}>Understanding knee angle</Text>
@@ -195,8 +251,7 @@ export default function Result() {
                 <Text style={[s.cardTitle, { color: colors.text, marginBottom: 0, marginLeft: 6 }]}>Scientific notice</Text>
               </View>
               <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19 }}>
-                Injury risk has not been assessed. GaitGuard provides kinematic measurements only and does not provide a
-                medical diagnosis, clinical evaluation, or substitute for a qualified healthcare professional.
+                Injury risk has not been assessed. GaitGuard provides descriptive kinematic measurements only. It does not provide a medical diagnosis, evaluate injury risk, or determine whether an exercise is safe or unsafe. Consult a qualified sports-medicine professional for clinical evaluation.
               </Text>
             </View>
 
