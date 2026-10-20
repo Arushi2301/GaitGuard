@@ -68,7 +68,7 @@ export default function Home() {
 
   return (
     <TabScreen>
-      <TopBar subtitle={today} />
+      <TopBar subtitle={today} timeGreeting />
 
       <View style={[s.hero, { backgroundColor: colors.lavender }]}>
         <View style={{ flex: 1 }}>

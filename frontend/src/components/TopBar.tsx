@@ -4,6 +4,7 @@ import { ReactNode } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../services/auth';
+import { getGreeting } from '../services/greeting';
 import { useNotifications } from '../services/notifications';
 import { space } from '../theme/palette';
 import { useTheme } from '../theme/ThemeContext';
@@ -45,7 +46,7 @@ function IconButton({ icon, onPress, badge }: {
 }
 
 /* ---------- Top bar ---------- */
-export default function TopBar({ subtitle }: { subtitle?: string }) {
+export default function TopBar({ subtitle, timeGreeting }: { subtitle?: string; timeGreeting?: boolean }) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const firstName = user?.name?.split(' ')[0] ?? 'there';
@@ -56,7 +57,9 @@ export default function TopBar({ subtitle }: { subtitle?: string }) {
       <Pressable onPress={() => router.push('/profile')} style={s.left}>
         <Avatar />
         <View style={{ marginLeft: 12, flexShrink: 1 }}>
-          <Text numberOfLines={1} style={[s.hi, { color: colors.text }]}>Hi, {firstName} 👋</Text>
+          <Text numberOfLines={1} style={[s.hi, { color: colors.text }]}>
+            {timeGreeting ? `${getGreeting(new Date())}, ${firstName}` : `Hi, ${firstName} 👋`}
+          </Text>
           {!!subtitle && <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 13 }}>{subtitle}</Text>}
         </View>
       </Pressable>
