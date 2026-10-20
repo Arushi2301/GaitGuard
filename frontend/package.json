@@ -49,7 +49,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "node --test src/services/__tests__"
+    "test": "node --test \"src/services/__tests__/*.test.js\""
   },
   "private": true
 }
