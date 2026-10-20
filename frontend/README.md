@@ -208,7 +208,12 @@ The `Content-Type` header is not set manually.
 `null` angles are shown as **"Not measured"**, never as 0. Angles are interior knee angles
 (180° = straight leg; smaller = deeper bend). Only the first 15 s of a video are analyzed.
  
-The per-rep fields are parsed in `history.ts` so that `screening.ts` and its tests stay unchanged.
+Screening assessment logic in `screening.ts` provides evidence-based descriptive metrics:
+- Converts backend interior angles (180° = straight leg) to clinical knee flexion (`180° - angle`).
+- Reports continuous knee-angle measurements and cautions that knee angle alone cannot establish anatomical squat depth or whether thighs are parallel; it does not assign categorical depth labels.
+- Calculates left–right depth difference descriptively with 2D perspective caveats (no arbitrary normal/abnormal cutoffs).
+- Reports observed repetition spread when at least two valid repetitions are segmented (no arbitrary consistency cutoffs).
+- Restricts squat assessment strictly to the supported squat movement.
  
 ---
  
