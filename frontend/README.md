@@ -50,10 +50,9 @@ MediaPipe pose estimation and returns knee-angle measurements that the app displ
 - **Bottom tab bar:** Home · Analyze · History · Progress.
 ### Analysis flow
 1. **Analyze tab:** choose a movement. Squat is available; Walking and Drop Jump show "Coming soon".
-2. **Capture:** filming guide, "Please use the back camera" notice, recording length (**10 s / 15 s**),
-   Record or Upload.
-3. **Record:** back camera only, 1080p, 3-2-1 countdown, framing guide, progress bar, stops automatically
-   at the chosen length (minimum 2 s).
+2. **Capture:** filming guide, "Please use the back camera" notice, Record or Upload.
+3. **Record:** back camera only, 1080p, 3-2-1 countdown with tick sounds, framing guide, 0-15 s timer and an end beep. Recording is always
+   exactly **15 s** and cannot be stopped early; Cancel discards it.
 4. **Upload:** videos longer than 15 s are allowed, with a notice that only the first 15 s are analyzed.
 5. **Preview:** plays the clip with a quick checklist; Analyze or Retake.
 6. **Result:**
@@ -70,7 +69,7 @@ MediaPipe pose estimation and returns knee-angle measurements that the app displ
 - Data: clear analysis history
 - Support: Help & Support, About
 - Log out
-Recording length and camera were **removed from Settings**: length is chosen on the Capture screen, and
+Recording length and camera were **removed from Settings**: recordings are always 15 s, and
 only the back camera is used (front-camera video is mirrored and would swap left and right legs).
  
 ### Profile
@@ -160,7 +159,7 @@ src/
       analyze.tsx             movement selection
       history.tsx             (planned)
       progress.tsx            (later)
-    capture.tsx               guide, length, record / upload
+    capture.tsx               guide, record / upload
     record.tsx                camera
     preview.tsx               playback
     result.tsx                result display, saves history

@@ -3,28 +3,31 @@ import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppButton } from '../components/ui';
 import { setVideoUri } from '../services/videoStore';
 import { radius, space } from '../theme/palette';
 import { useTheme } from '../theme/ThemeContext';
 
-const MIN_SECONDS = 2;
+const RECORD_SECONDS = 15;
+const EARLY_END_SECONDS = RECORD_SECONDS - 1; // anything shorter is treated as an interrupted recording
 
 export default function Record() {
   const { colors } = useTheme();
-  const { movement, seconds } = useLocalSearchParams<{ movement: string; seconds?: string }>();
-  const limit = seconds === '10' ? 10 : 15;
+  const { movement } = useLocalSearchParams<{ movement: string }>();
 
   const camRef = useRef<CameraView>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cancelledRef = useRef(false);
+  const startedAtRef = useRef(0);
 
   const [perm, requestPerm] = useCameraPermissions();
   const [ready, setReady] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [recording, setRecording] = useState(false);
+  const recordingRef = useRef(false);
   const [elapsed, setElapsed] = useState(0);
 
   // Sounds are loaded up front so the first tick has no delay
@@ -45,6 +48,14 @@ export default function Record() {
     setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }).catch(() => {});
   }, []);
 
+  // Backgrounding the app ends the recording early; it is then rejected below
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state !== 'active' && recordingRef.current) camRef.current?.stopRecording();
+    });
+    return () => sub.remove();
+  }, []);
+
   // Clean up timers if the screen closes
   useEffect(
     () => () => {
@@ -56,20 +67,31 @@ export default function Record() {
 
   const startRecording = async () => {
     if (!camRef.current) return;
+    cancelledRef.current = false;
+    startedAtRef.current = Date.now();
+    recordingRef.current = true;
     setRecording(true);
     setElapsed(0);
-    tickRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
+    tickRef.current = setInterval(() => setElapsed(s => Math.min(RECORD_SECONDS, s + 1)), 1000);
     try {
-      const video = await camRef.current.recordAsync({ maxDuration: limit });
-      playSound(endPlayer);
-      if (video?.uri) {
-        setVideoUri(video.uri);
-        router.replace({ pathname: '/preview', params: { movement } });
+      const video = await camRef.current.recordAsync({ maxDuration: RECORD_SECONDS });
+      if (cancelledRef.current) {
+        router.back(); // recording discarded
+        return;
       }
+      const seconds = (Date.now() - startedAtRef.current) / 1000;
+      if (!video?.uri || seconds < EARLY_END_SECONDS) {
+        Alert.alert('Recording stopped early', `The recording must run for the full ${RECORD_SECONDS} seconds. Please record again.`);
+        return;
+      }
+      playSound(endPlayer);
+      setVideoUri(video.uri);
+      router.replace({ pathname: '/preview', params: { movement } });
     } catch (e: any) {
       Alert.alert('Recording failed', String(e?.message ?? e));
     } finally {
       if (tickRef.current) clearInterval(tickRef.current);
+      recordingRef.current = false;
       setRecording(false);
     }
   };
@@ -92,8 +114,8 @@ export default function Record() {
     }, 1000);
   };
 
-  const stop = () => {
-    if (elapsed < MIN_SECONDS) return; // too short to analyze
+  const cancel = () => {
+    cancelledRef.current = true;
     camRef.current?.stopRecording();
   };
 
@@ -117,7 +139,7 @@ export default function Record() {
 
   const busy = recording || countdown !== null;
   const status = recording
-    ? elapsed < MIN_SECONDS ? 'Keep going…' : 'Tap to stop'
+    ? 'Recording… stay in frame'
     : countdown !== null ? 'Get into position'
     : ready ? 'Tap to start · 3 s countdown' : 'Starting camera…';
 
@@ -143,16 +165,23 @@ export default function Record() {
       <SafeAreaView edges={['top', 'bottom']} style={StyleSheet.absoluteFill} pointerEvents="box-none">
         {/* Top bar */}
         <View style={s.top}>
-          <Pressable onPress={() => router.back()} disabled={busy} style={[s.round, busy && { opacity: 0.3 }]}>
-            <Ionicons name="close" size={24} color="#fff" />
-          </Pressable>
+          {recording ? (
+            <Pressable onPress={cancel} style={s.cancel}>
+              <Text style={s.pillText}>Cancel</Text>
+            </Pressable>
+          ) : (
+            <Pressable onPress={() => router.back()} disabled={busy} style={[s.round, busy && { opacity: 0.3 }]}>
+              <Ionicons name="close" size={24} color="#fff" />
+            </Pressable>
+          )}
           <View style={s.pill}>
             <Ionicons name="camera-outline" size={14} color="#fff" />
-            <Text style={s.pillText}>Back camera · {limit}s max</Text>
+            <Text style={s.pillText}>Back camera · {RECORD_SECONDS}s</Text>
           </View>
           <View style={{ width: 44 }} />
         </View>
         <Text style={s.hint}>Keep your whole body inside the frame</Text>
+        <Text style={s.hint}>The video will be recorded for {RECORD_SECONDS} seconds.</Text>
 
         {/* Countdown */}
         {countdown !== null && (
@@ -166,21 +195,17 @@ export default function Record() {
           {recording && (
             <>
               <View style={s.track}>
-                <View style={[s.fill, { width: `${Math.min(100, (elapsed / limit) * 100)}%`, backgroundColor: colors.danger }]} />
+                <View style={[s.fill, { width: `${Math.min(100, (elapsed / RECORD_SECONDS) * 100)}%`, backgroundColor: colors.danger }]} />
               </View>
-              <Text style={s.timer}>● {elapsed}s / {limit}s</Text>
+              <Text style={s.timer}>● {elapsed}s / {RECORD_SECONDS}s</Text>
             </>
           )}
 
-          <Pressable onPress={recording ? stop : beginCountdown} style={s.recOuter}>
-            <View
-              style={[
-                s.recInner,
-                { backgroundColor: recording ? colors.danger : colors.primary },
-                recording && s.recInnerActive,
-              ]}
-            />
-          </Pressable>
+          {!recording && (
+            <Pressable onPress={beginCountdown} disabled={busy} style={[s.recOuter, busy && { opacity: 0.4 }]}>
+              <View style={[s.recInner, { backgroundColor: colors.primary }]} />
+            </Pressable>
+          )}
           <Text style={s.status}>{status}</Text>
         </View>
       </SafeAreaView>
@@ -208,6 +233,10 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.45)',
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.pill,
   },
+  cancel: {
+    backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 16, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+  },
   pillText: { color: '#fff', fontWeight: '700', fontSize: 13, marginLeft: 6 },
   hint: {
     alignSelf: 'center', marginTop: space.sm, color: '#fff', fontSize: 13, fontWeight: '600',
@@ -226,7 +255,6 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   recInner: { width: 64, height: 64, borderRadius: 32 },
-  recInnerActive: { width: 34, height: 34, borderRadius: 8 },
   status: {
     color: '#fff', fontWeight: '700', marginTop: 12, backgroundColor: 'rgba(0,0,0,0.4)',
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill, overflow: 'hidden',
