@@ -57,8 +57,6 @@ export default function Home() {
 
   const latest = items[0];
   const activeDays = new Set(items.map(i => new Date(i.createdAt).toDateString())).size;
-  const totalReps = items.reduce((sum, i) => sum + (i.repCount ?? 0), 0);
-  const latestAngle = latest ? entryAngle(latest) : null;
   const trend = items.slice(0, 7).reverse();
   const tip = TIPS[new Date().getDate() % TIPS.length];
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' });
@@ -108,8 +106,6 @@ export default function Home() {
           <View style={s.grid}>
             <Stat icon="analytics" label="Analyses" value={String(items.length)} bg={colors.pink} />
             <Stat icon="calendar" label="Active days" value={String(activeDays)} bg={colors.mint} />
-            <Stat icon="repeat" label="Total reps" value={String(totalReps)} bg={colors.yellow} />
-            <Stat icon="body" label="Latest angle" value={latestAngle !== null ? `${fmt(latestAngle)}°` : '—'} bg={colors.peach} />
           </View>
 
           {latest && (
