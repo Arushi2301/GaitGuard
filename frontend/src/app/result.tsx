@@ -135,7 +135,7 @@ export default function Result() {
             <ActivityIndicator size="large" color={colors.onPastel} />
             <Text style={[s.loadingTitle, { color: colors.onPastel }]}>Analyzing video…</Text>
             <Text style={{ color: colors.onPastel, opacity: 0.75, textAlign: 'center', marginTop: 4 }}>
-              Tracking body landmarks and calculating knee angles. This usually takes 10–30 seconds.
+              Tracking body landmarks and calculating knee angles. This usually takes 30–60 seconds.
             </Text>
           </View>
         )}
