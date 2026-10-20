@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -26,6 +27,24 @@ export default function Record() {
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
+  // Sounds are loaded up front so the first tick has no delay
+  const tickPlayer = useAudioPlayer(require('../../assets/sounds/tick.wav'));
+  const endPlayer = useAudioPlayer(require('../../assets/sounds/end.wav'));
+
+  const playSound = (player: typeof tickPlayer) => {
+    try {
+      player.seekTo(0);
+      player.play();
+    } catch {
+      // a missing sound must never block recording
+    }
+  };
+
+  // Play cues even when the phone is on silent; the camera is muted, so no mic is used
+  useEffect(() => {
+    setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }).catch(() => {});
+  }, []);
+
   // Clean up timers if the screen closes
   useEffect(
     () => () => {
@@ -42,6 +61,7 @@ export default function Record() {
     tickRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
     try {
       const video = await camRef.current.recordAsync({ maxDuration: limit });
+      playSound(endPlayer);
       if (video?.uri) {
         setVideoUri(video.uri);
         router.replace({ pathname: '/preview', params: { movement } });
@@ -58,6 +78,7 @@ export default function Record() {
     if (!ready || recording || countdown !== null) return;
     let n = 3;
     setCountdown(n);
+    playSound(tickPlayer);
     countRef.current = setInterval(() => {
       n -= 1;
       if (n <= 0) {
@@ -66,6 +87,7 @@ export default function Record() {
         startRecording();
       } else {
         setCountdown(n);
+        playSound(tickPlayer);
       }
     }, 1000);
   };
