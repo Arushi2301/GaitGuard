@@ -248,3 +248,4 @@ Videos are sent to the backend only for analysis and are not stored by the app.
 4. Exercise Library
 5. Units setting
  
+Movement-specific wording (instructions, tips, result notes) lives in `src/constants/movementGuides.ts`, keyed by movement id. General screens use generic wording only.

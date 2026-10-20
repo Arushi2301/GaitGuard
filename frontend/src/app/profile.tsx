@@ -184,7 +184,7 @@ export default function Profile() {
 
             <AppInput label="Preferred sport" icon="football-outline" placeholder="e.g. Football, Running"
               value={form.sport} onChangeText={set('sport')} />
-            <AppInput label="Fitness goals" icon="flag-outline" placeholder="e.g. Improve squat depth"
+            <AppInput label="Fitness goals" icon="flag-outline" placeholder="e.g. Improve knee mobility"
               value={form.goals} onChangeText={set('goals')} multiline />
 
             <AppButton title="Save Changes" onPress={save} loading={saving} />

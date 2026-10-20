@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import TopBar, { TabScreen } from '../../components/TopBar';
+import { getMovementGuide } from '../../constants/movementGuides';
 import { Movement, MOVEMENTS } from '../../constants/movements';
 import { radius, space } from '../../theme/palette';
 import { useTheme } from '../../theme/ThemeContext';
@@ -50,7 +51,7 @@ export default function Analyze() {
             </View>
             <View style={s.chips}>
               <Chip icon="videocam-outline" text={m.view} />
-              <Chip icon="repeat-outline" text={m.reps} />
+              <Chip icon="repeat-outline" text={getMovementGuide(m.id).repsLabel} />
             </View>
           </View>
 

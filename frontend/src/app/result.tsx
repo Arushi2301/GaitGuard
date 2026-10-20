@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppButton } from '../components/ui';
+import { getMovementGuide } from '../constants/movementGuides';
 import { getMovement } from '../constants/movements';
 import { analyzeVideo } from '../services/analysis';
 import { useAuth } from '../services/auth';
@@ -37,6 +38,7 @@ export default function Result() {
   const savedRef = useRef(false);
 
   const movementDetails = getMovement(movement);
+  const guide = getMovementGuide(movement);
   const movementName =
     movementDetails?.name ?? (movement ? movement.charAt(0).toUpperCase() + movement.slice(1) : 'Movement Screening');
 
@@ -178,7 +180,7 @@ export default function Result() {
             {/* Per-rep values */}
             {!!reps && (reps.leftRepMins.length > 0 || reps.rightRepMins.length > 0) && (
               <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[s.cardTitle, { color: colors.text }]}>Depth per rep</Text>
+                <Text style={[s.cardTitle, { color: colors.text }]}>{guide.depthLabel}</Text>
                 <RepRow label="Left" values={reps.leftRepMins} />
                 <RepRow label="Right" values={reps.rightRepMins} />
               </View>
@@ -197,13 +199,13 @@ export default function Result() {
                 {assessment.primaryLeg && (
                   <View style={{ marginBottom: 10 }}>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 2 }}>
-                      Observed Squat Depth
+                      {guide.assessmentTitle}
                     </Text>
                     <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 18 }}>
                       {assessment.primaryLeg.description}
                     </Text>
                     <Text style={{ fontSize: 11, color: colors.muted, opacity: 0.8, marginTop: 2 }}>
-                      Squat biomechanics research considers thigh position as well as joint angles. Knee angle alone cannot establish whether the thighs are parallel for every person.
+                      {guide.assessmentNote}
                     </Text>
                   </View>
                 )}
@@ -240,7 +242,7 @@ export default function Result() {
               <Text style={[s.cardTitle, { color: colors.text }]}>Understanding knee angle</Text>
               <Text style={{ color: colors.muted, lineHeight: 20 }}>
                 180° is a straight leg. Smaller knee angles indicate deeper knee bending during the movement.
-                “Knee bend” shows how far the knee bent from straight (180° − angle).
+                “Knee bend” shows how far the knee bent from straight (180° − angle). {guide.kneeAngleNote} {guide.repsNote}
               </Text>
             </View>
 

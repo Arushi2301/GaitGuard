@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ReactNode, useState } from 'react';
 import { LayoutAnimation, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, UIManager, View } from 'react-native';
+import { generalRecordingTips } from '../constants/movementGuides';
 import { radius, space, ThemeColors } from '../theme/palette';
 import { useTheme } from '../theme/ThemeContext';
 
@@ -18,14 +19,7 @@ const STEPS: { icon: keyof typeof Ionicons.glyphMap; bg: keyof ThemeColors; titl
   { icon: 'stats-chart', bg: 'lavender', title: 'Review & track', text: 'See your result, then follow your progress in History and Progress.' },
 ];
 
-const TIPS = [
-  'Film from the side for squats and walking, and from the front for drop jumps.',
-  'Keep your whole body in the frame — head to feet.',
-  'Place the phone at hip height, 2–3 m away, and keep it still.',
-  'Use good lighting and avoid bright windows behind you.',
-  'Wear fitted clothes so your knees and hips are clearly visible.',
-  'Perform 2–3 slow, controlled repetitions.',
-];
+const TIPS = generalRecordingTips;
 
 const FAQS = [
   {

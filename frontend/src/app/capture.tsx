@@ -3,6 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppButton } from '../components/ui';
+import { generalRecordingTips, getMovementGuide } from '../constants/movementGuides';
 import { getMovement } from '../constants/movements';
 import { setVideoUri } from '../services/videoStore';
 import { radius, space } from '../theme/palette';
@@ -14,6 +15,7 @@ export default function Capture() {
   const { colors } = useTheme();
   const { movement } = useLocalSearchParams<{ movement: string }>();
   const m = getMovement(movement);
+  const guide = getMovementGuide(movement);
 
   const goPreview = (uri: string) => {
     setVideoUri(uri);
@@ -61,16 +63,24 @@ export default function Capture() {
         </View>
         <View style={{ flex: 1, marginLeft: 14 }}>
           <Text style={[s.heroTitle, { color: colors.onPastel }]}>{m.name}</Text>
-          <Text style={{ color: colors.onPastel, opacity: 0.75, marginTop: 2 }}>{m.view} · {m.reps}</Text>
+          <Text style={{ color: colors.onPastel, opacity: 0.75, marginTop: 2 }}>{m.view} · {guide.repsLabel}</Text>
         </View>
       </View>
 
       {/* Filming guide */}
       <Text style={[s.section, { color: colors.muted }]}>FILMING GUIDE</Text>
       <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <GuideRow icon="person-outline" text={m.instruction} />
-        <GuideRow icon="repeat-outline" text={`Perform ${m.reps}, slowly and with control.`} />
-        <GuideRow icon="sunny-outline" text="Good lighting, fitted clothes, nothing blocking your legs." last />
+        {generalRecordingTips.map((tip, i) => (
+          <GuideRow key={tip} icon="checkmark-circle-outline" text={tip} last={i === generalRecordingTips.length - 1} />
+        ))}
+      </View>
+
+      {/* Movement-specific guide */}
+      <Text style={[s.section, { color: colors.muted }]}>HOW TO PERFORM · {m.name.toUpperCase()}</Text>
+      <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {[...guide.howTo, ...guide.recordTips].map((tip, i, all) => (
+          <GuideRow key={tip} icon="person-outline" text={tip} last={i === all.length - 1} />
+        ))}
       </View>
 
       {/* Back camera notice */}

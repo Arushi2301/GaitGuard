@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppButton } from '../components/ui';
+import { getMovement } from '../constants/movements';
+import { getMovementGuide } from '../constants/movementGuides';
 import { setVideoUri } from '../services/videoStore';
 import { radius, space } from '../theme/palette';
 import { useTheme } from '../theme/ThemeContext';
@@ -16,6 +18,8 @@ const EARLY_END_SECONDS = RECORD_SECONDS - 1; // anything shorter is treated as 
 export default function Record() {
   const { colors } = useTheme();
   const { movement } = useLocalSearchParams<{ movement: string }>();
+  const movementName = getMovement(movement)?.name ?? 'Movement';
+  const tip = getMovementGuide(movement).recordTips[0];
 
   const camRef = useRef<CameraView>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -176,11 +180,12 @@ export default function Record() {
           )}
           <View style={s.pill}>
             <Ionicons name="camera-outline" size={14} color="#fff" />
-            <Text style={s.pillText}>Back camera · {RECORD_SECONDS}s</Text>
+            <Text style={s.pillText}>{movementName} · {RECORD_SECONDS}s</Text>
           </View>
           <View style={{ width: 44 }} />
         </View>
         <Text style={s.hint}>Keep your whole body inside the frame</Text>
+        {!!tip && <Text style={[s.hint, { marginTop: 6 }]}>{tip}</Text>}
         <Text style={s.hint}>The video will be recorded for {RECORD_SECONDS} seconds.</Text>
 
         {/* Countdown */}
