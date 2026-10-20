@@ -102,7 +102,7 @@ export default function Profile() {
 
   const bmi = bmiOf(user.heightCm, user.weightKg);
   const bmiCategory = bmi ? getBmiCategory(Number(bmi)) : null;
-  const memberSince = new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+  const createdOn = new Date(user.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -117,7 +117,7 @@ export default function Profile() {
           </Pressable>
           <Text style={[s.name, { color: colors.text }]}>{user.name}</Text>
           <Text style={{ color: colors.muted }}>{user.email}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, marginTop: 4 }}>Member since {memberSince}</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, marginTop: 4 }}>Account created on {createdOn}</Text>
         </View>
 
         {!editing ? (
