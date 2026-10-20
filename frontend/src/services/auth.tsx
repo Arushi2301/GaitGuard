@@ -16,6 +16,7 @@ export type UserProfile = {
   sport?: string;
   goals?: string;
   createdAt: string;
+  welcomePending?: boolean; // set on signup, cleared once the welcome notification is shown
 };
 
 type StoredUser = UserProfile & { passwordHash: string };
@@ -105,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: cleanEmail,
       phone: cleanPhone || undefined,
       createdAt: new Date().toISOString(),
+      welcomePending: true,
       passwordHash: await hashPassword(password),
     };
     await writeUsers([...users, newUser]);

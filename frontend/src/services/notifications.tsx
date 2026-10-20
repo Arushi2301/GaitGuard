@@ -40,8 +40,9 @@ type NotificationsContextValue = {
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const email = user?.email ?? null;
+  const welcomePending = !!user?.welcomePending;
   const emailRef = useRef<string | null>(email);
   const [items, setItems] = useState<AppNotification[]>([]);
 
@@ -55,16 +56,20 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(keyFor(email))
       .then(raw => {
         if (emailRef.current !== email) return; // user changed meanwhile
-        if (raw) {
-          setItems(JSON.parse(raw));
-        } else {
-          const first = [welcome()];
-          setItems(first);
-          AsyncStorage.setItem(keyFor(email), JSON.stringify(first)).catch(() => {});
+        const stored: AppNotification[] = raw ? JSON.parse(raw) : [];
+        if (!welcomePending) {
+          setItems(stored);
+          return;
         }
+        // Brand-new account: show the welcome once, then clear the flag
+        const next = [welcome(), ...stored];
+        setItems(next);
+        AsyncStorage.setItem(keyFor(email), JSON.stringify(next))
+          .then(() => updateProfile({ welcomePending: false }))
+          .catch(() => {});
       })
       .catch(() => setItems([]));
-  }, [email]);
+  }, [email, welcomePending]);
 
   const persist = (next: AppNotification[]) => {
     if (emailRef.current) {
