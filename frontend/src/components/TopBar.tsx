@@ -46,7 +46,7 @@ function IconButton({ icon, onPress, badge }: {
 }
 
 /* ---------- Top bar ---------- */
-export default function TopBar({ subtitle, timeGreeting }: { subtitle?: string; timeGreeting?: boolean }) {
+export default function TopBar({ subtitle }: { subtitle?: string }) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const firstName = user?.name?.split(' ')[0] ?? 'there';
@@ -58,7 +58,7 @@ export default function TopBar({ subtitle, timeGreeting }: { subtitle?: string; 
         <Avatar />
         <View style={{ marginLeft: 12, flexShrink: 1 }}>
           <Text numberOfLines={1} style={[s.hi, { color: colors.text }]}>
-            {timeGreeting ? `${getGreeting(new Date())}, ${firstName}` : `Hi, ${firstName} 👋`}
+            {getGreeting(new Date())}, {firstName}
           </Text>
           {!!subtitle && <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 13 }}>{subtitle}</Text>}
         </View>
