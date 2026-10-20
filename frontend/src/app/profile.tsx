@@ -14,10 +14,14 @@ import {
 import { Avatar } from '../components/TopBar';
 import { AppButton, AppInput } from '../components/ui';
 import { FitnessLevel, normalizePhone, useAuth } from '../services/auth';
+import { BmiKey, getBmiCategory } from '../services/bmi';
 import { radius, space } from '../theme/palette';
 import { useTheme } from '../theme/ThemeContext';
 
 const LEVELS: FitnessLevel[] = ['Beginner', 'Intermediate', 'Advanced'];
+const BMI_COLOR: Record<BmiKey, 'lavender' | 'mint' | 'yellow' | 'peach'> = {
+  underweight: 'lavender', normal: 'mint', overweight: 'yellow', obese: 'peach',
+};
 
 function bmiOf(heightCm?: string, weightKg?: string) {
   const h = Number(heightCm) / 100;
@@ -97,7 +101,8 @@ export default function Profile() {
   };
 
   const bmi = bmiOf(user.heightCm, user.weightKg);
-  const memberSince = new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+  const bmiCategory = bmi ? getBmiCategory(Number(bmi)) : null;
+  const createdOn = new Date(user.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -112,7 +117,7 @@ export default function Profile() {
           </Pressable>
           <Text style={[s.name, { color: colors.text }]}>{user.name}</Text>
           <Text style={{ color: colors.muted }}>{user.email}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, marginTop: 4 }}>Member since {memberSince}</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, marginTop: 4 }}>Account created on {createdOn}</Text>
         </View>
 
         {!editing ? (
@@ -122,8 +127,18 @@ export default function Profile() {
               <Tile label="Age" value={user.age ? `${user.age}` : '—'} unit="yrs" bg={colors.pink} />
               <Tile label="Height" value={user.heightCm || '—'} unit="cm" bg={colors.mint} />
               <Tile label="Weight" value={user.weightKg || '—'} unit="kg" bg={colors.yellow} />
-              <Tile label="BMI" value={bmi ?? '—'} bg={colors.lavender} />
+              <Tile
+                label="BMI"
+                value={bmi ?? '—'}
+                bg={bmiCategory ? colors[BMI_COLOR[bmiCategory.key]] : colors.lavender}
+                note={bmiCategory ? `${bmiCategory.label} (${bmiCategory.range})` : undefined}
+              />
             </View>
+            {!!bmiCategory && (
+              <Text style={{ color: colors.muted, fontSize: 12, marginBottom: space.md }}>
+                BMI is a general indicator and not a diagnosis.
+              </Text>
+            )}
 
             {/* Details */}
             <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -169,7 +184,7 @@ export default function Profile() {
 
             <AppInput label="Preferred sport" icon="football-outline" placeholder="e.g. Football, Running"
               value={form.sport} onChangeText={set('sport')} />
-            <AppInput label="Fitness goals" icon="flag-outline" placeholder="e.g. Improve squat depth"
+            <AppInput label="Fitness goals" icon="flag-outline" placeholder="e.g. Improve knee mobility"
               value={form.goals} onChangeText={set('goals')} multiline />
 
             <AppButton title="Save Changes" onPress={save} loading={saving} />
@@ -181,7 +196,7 @@ export default function Profile() {
   );
 }
 
-function Tile({ label, value, unit, bg }: { label: string; value: string; unit?: string; bg: string }) {
+function Tile({ label, value, unit, bg, note }: { label: string; value: string; unit?: string; bg: string; note?: string }) {
   const { colors } = useTheme();
   return (
     <View style={[s.tile, { backgroundColor: bg }]}>
@@ -190,6 +205,7 @@ function Tile({ label, value, unit, bg }: { label: string; value: string; unit?:
         {value}
         {!!unit && value !== '—' && <Text style={{ fontSize: 12, fontWeight: '600' }}> {unit}</Text>}
       </Text>
+      {!!note && <Text style={{ color: colors.onPastel, fontSize: 12, fontWeight: '700', marginTop: 4 }}>{note}</Text>}
     </View>
   );
 }

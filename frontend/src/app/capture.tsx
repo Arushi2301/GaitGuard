@@ -1,22 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppButton } from '../components/ui';
+import { generalRecordingTips, getMovementGuide } from '../constants/movementGuides';
 import { getMovement } from '../constants/movements';
 import { setVideoUri } from '../services/videoStore';
 import { radius, space } from '../theme/palette';
 import { useTheme } from '../theme/ThemeContext';
 
 const ANALYZED_SECONDS = 15; // backend analyzes only the first 15 s
-const DURATIONS = [10, 15] as const;
 
 export default function Capture() {
   const { colors } = useTheme();
   const { movement } = useLocalSearchParams<{ movement: string }>();
   const m = getMovement(movement);
-  const [seconds, setSeconds] = useState<10 | 15>(15);
+  const guide = getMovementGuide(movement);
 
   const goPreview = (uri: string) => {
     setVideoUri(uri);
@@ -64,16 +63,24 @@ export default function Capture() {
         </View>
         <View style={{ flex: 1, marginLeft: 14 }}>
           <Text style={[s.heroTitle, { color: colors.onPastel }]}>{m.name}</Text>
-          <Text style={{ color: colors.onPastel, opacity: 0.75, marginTop: 2 }}>{m.view} · {m.reps}</Text>
+          <Text style={{ color: colors.onPastel, opacity: 0.75, marginTop: 2 }}>{m.view} · {guide.repsLabel}</Text>
         </View>
       </View>
 
       {/* Filming guide */}
       <Text style={[s.section, { color: colors.muted }]}>FILMING GUIDE</Text>
       <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <GuideRow icon="person-outline" text={m.instruction} />
-        <GuideRow icon="repeat-outline" text={`Perform ${m.reps}, slowly and with control.`} />
-        <GuideRow icon="sunny-outline" text="Good lighting, fitted clothes, nothing blocking your legs." last />
+        {generalRecordingTips.map((tip, i) => (
+          <GuideRow key={tip} icon="checkmark-circle-outline" text={tip} last={i === generalRecordingTips.length - 1} />
+        ))}
+      </View>
+
+      {/* Movement-specific guide */}
+      <Text style={[s.section, { color: colors.muted }]}>HOW TO PERFORM · {m.name.toUpperCase()}</Text>
+      <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {[...guide.howTo, ...guide.recordTips].map((tip, i, all) => (
+          <GuideRow key={tip} icon="person-outline" text={tip} last={i === all.length - 1} />
+        ))}
       </View>
 
       {/* Back camera notice */}
@@ -87,26 +94,14 @@ export default function Capture() {
         </View>
       </View>
 
-      {/* Recording length */}
-      <Text style={[s.section, { color: colors.muted }]}>RECORDING LENGTH</Text>
-      <View style={[s.segment, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        {DURATIONS.map(d => {
-          const active = d === seconds;
-          return (
-            <Pressable key={d} onPress={() => setSeconds(d)} style={[s.segBtn, active && { backgroundColor: colors.primary }]}>
-              <Text style={{ fontWeight: '800', color: active ? colors.onPrimary : colors.text }}>{d} seconds</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <Text style={{ color: colors.muted, fontSize: 12, marginTop: 6 }}>
-        Pick 15 s for slower movements so every rep fits. Only the first {ANALYZED_SECONDS} s of any video is analyzed.
+      <Text style={{ color: colors.muted, fontSize: 12, marginTop: space.md }}>
+        Recordings last {ANALYZED_SECONDS} seconds. Only the first {ANALYZED_SECONDS} s of any video is analyzed.
       </Text>
 
       {/* Actions */}
       <AppButton
         title="Record Video"
-        onPress={() => router.push({ pathname: '/record', params: { movement, seconds: String(seconds) } })}
+        onPress={() => router.push({ pathname: '/record', params: { movement } })}
         style={{ marginTop: space.lg }}
       />
       <AppButton title="Upload from Gallery" variant="outline" onPress={pickVideo} />
@@ -136,6 +131,4 @@ const s = StyleSheet.create({
   card: { borderWidth: 1.5, borderRadius: radius.md, paddingHorizontal: space.md },
   guide: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 12 },
   notice: { flexDirection: 'row', alignItems: 'center', padding: space.md, borderRadius: radius.md, marginTop: space.lg },
-  segment: { flexDirection: 'row', borderWidth: 1.5, borderRadius: radius.pill, padding: 4 },
-  segBtn: { flex: 1, paddingVertical: 12, borderRadius: radius.pill, alignItems: 'center' },
 });

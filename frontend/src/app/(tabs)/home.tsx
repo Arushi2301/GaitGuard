@@ -13,13 +13,13 @@ import { useTheme } from '../../theme/ThemeContext';
 type IconName = keyof typeof Ionicons.glyphMap;
 
 const TIPS = [
-  'Film from the side for squats — the camera should be at hip height.',
+  'Film from the side — the camera should be at hip height.',
   'Wear fitted clothes so your knees and hips are clearly visible.',
-  'Do 2–3 slow, controlled reps instead of many fast ones.',
+  'Move slowly and with control instead of rushing through reps.',
   'Good lighting from the front helps the app track your joints.',
   'Keep the phone still — lean it against something or use a stand.',
   'Screen at the same time of day to compare results fairly.',
-  'Warm up for a few minutes before recording your squats.',
+  'Warm up for a few minutes before recording your movement.',
 ];
 
 const fmt = (n: number) => n.toFixed(1);
@@ -57,8 +57,6 @@ export default function Home() {
 
   const latest = items[0];
   const activeDays = new Set(items.map(i => new Date(i.createdAt).toDateString())).size;
-  const totalReps = items.reduce((sum, i) => sum + (i.repCount ?? 0), 0);
-  const latestAngle = latest ? entryAngle(latest) : null;
   const trend = items.slice(0, 7).reverse();
   const tip = TIPS[new Date().getDate() % TIPS.length];
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' });
@@ -74,7 +72,7 @@ export default function Home() {
         <View style={{ flex: 1 }}>
           <Text style={[s.heroTitle, { color: colors.onPastel }]}>Ready for today’s{'\n'}screening?</Text>
           <Text style={{ color: colors.onPastel, opacity: 0.75, marginTop: 6 }}>
-            {latest ? `Last screening: ${timeAgo(latest.createdAt)}` : 'Record a short squat to get started.'}
+            {latest ? `Last screening: ${timeAgo(latest.createdAt)}` : 'Record a short movement to get started.'}
           </Text>
           <Pressable onPress={goAnalyze} style={[s.heroBtn, { backgroundColor: colors.tabBar }]}>
             <Text style={{ color: colors.onTabBar, fontWeight: '800' }}>Start Analysis</Text>
@@ -90,9 +88,9 @@ export default function Home() {
         <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={[s.cardTitle, { color: colors.text }]}>Do your first screening</Text>
           {[
-            ['list', 'Choose Squat in the Analyze tab'],
-            ['videocam', 'Record 2–3 slow squats from the side'],
-            ['stats-chart', 'See your knee angles and reps'],
+            ['list', 'Choose a movement in the Analyze tab'],
+            ['videocam', 'Record a short clip from the side'],
+            ['stats-chart', 'See your knee angle during the movement'],
           ].map(([icon, text], i) => (
             <View key={text} style={s.stepRow}>
               <View style={[s.stepNum, { backgroundColor: [colors.pink, colors.mint, colors.yellow][i] }]}>
@@ -108,8 +106,6 @@ export default function Home() {
           <View style={s.grid}>
             <Stat icon="analytics" label="Analyses" value={String(items.length)} bg={colors.pink} />
             <Stat icon="calendar" label="Active days" value={String(activeDays)} bg={colors.mint} />
-            <Stat icon="repeat" label="Total reps" value={String(totalReps)} bg={colors.yellow} />
-            <Stat icon="body" label="Latest angle" value={latestAngle !== null ? `${fmt(latestAngle)}°` : '—'} bg={colors.peach} />
           </View>
 
           {latest && (
@@ -141,7 +137,7 @@ export default function Home() {
 
           {trend.length >= 2 && (
             <>
-              <SectionHeader title="Depth trend" />
+              <SectionHeader title="Knee angle trend" />
               <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 0 }]}>
                 <View style={s.chart}>
                   {trend.map(e => {
@@ -158,7 +154,7 @@ export default function Home() {
                   })}
                 </View>
                 <Text style={{ color: colors.muted, fontSize: 12, marginTop: 8 }}>
-                  Knee angle per screening (°). Taller bar = deeper squat.
+                  Knee angle per screening (°). Taller bar = deeper knee bend.
                 </Text>
               </View>
             </>
