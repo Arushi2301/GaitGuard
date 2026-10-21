@@ -36,6 +36,8 @@ const {
   assessBilateralDifference,
   assessRepetitionVariation,
   assessSquatMovement,
+  assessSquat,
+  SQUAT_ASSESSMENT_SOURCES,
 } = require(distFile);
 
 describe('Member 3 — Screening Logic & Measurement Validation', () => {
@@ -803,6 +805,211 @@ describe('Member 3 — Screening Logic & Measurement Validation', () => {
         hasRightAngle: true,
       };
       assert.strictEqual(assessSquatMovement(jumpMeasurement), null);
+    });
+  });
+
+  describe('14. Squat screening assessment (assessSquat)', () => {
+    it('returns the exact required output shape with sources and non-diagnostic summary', () => {
+      const measurement = {
+        movement: 'squat',
+        leftKneeMinAngle: 75.0,
+        rightKneeMinAngle: 75.0,
+      };
+      const reps = {
+        leftMeanRepMin: 75.0,
+        rightMeanRepMin: 75.0,
+      };
+
+      const result = assessSquat(measurement, reps);
+      assert.ok(result !== null && typeof result === 'object');
+      assert.strictEqual(typeof result.depthCategory, 'string');
+      assert.strictEqual(typeof result.summary, 'string');
+      assert.ok(Array.isArray(result.flags));
+      assert.ok(Array.isArray(result.sources));
+      assert.strictEqual(result.sources.length, 4);
+      assert.deepStrictEqual(result.sources, SQUAT_ASSESSMENT_SOURCES);
+      assert.strictEqual(result.asymmetryDegrees, 0.0);
+      assert.strictEqual(result.depthCategory, 'Parallel');
+      assert.ok(result.summary.includes('Screening result'));
+      assert.ok(result.summary.includes('consider a professional assessment'));
+      assert.ok(!result.summary.toLowerCase().includes('injury risk'));
+      assert.ok(!result.summary.toLowerCase().includes('diagnose'));
+    });
+
+    it('classifies every supported depth-category boundary and values around each boundary', () => {
+      // 0.0° (180.0° flexion) -> Deep
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 0.0 }).depthCategory, 'Deep');
+      // 69.9° (110.1° flexion) -> Deep
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 69.9 }).depthCategory, 'Deep');
+      // 70.0° (110.0° flexion) -> Deep boundary
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 70.0 }).depthCategory, 'Deep');
+
+      // 70.1° (109.9° flexion) -> Parallel boundary
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 70.1 }).depthCategory, 'Parallel');
+      // 80.0° (100.0° flexion) -> Parallel
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 80.0 }).depthCategory, 'Parallel');
+      // 89.9° (90.1° flexion) -> Parallel
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 89.9 }).depthCategory, 'Parallel');
+      // 90.0° (90.0° flexion) -> Parallel boundary
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 90.0 }).depthCategory, 'Parallel');
+
+      // 90.1° (89.9° flexion) -> Half boundary
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 90.1 }).depthCategory, 'Half');
+      // 105.0° (75.0° flexion) -> Half
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 105.0 }).depthCategory, 'Half');
+      // 119.9° (60.1° flexion) -> Half
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 119.9 }).depthCategory, 'Half');
+      // 120.0° (60.0° flexion) -> Half boundary
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 120.0 }).depthCategory, 'Half');
+
+      // 120.1° (59.9° flexion) -> Shallow boundary
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 120.1 }).depthCategory, 'Shallow');
+      // 150.0° (30.0° flexion) -> Shallow
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 150.0 }).depthCategory, 'Shallow');
+      // 180.0° (0.0° flexion) -> Shallow boundary
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 180.0 }).depthCategory, 'Shallow');
+
+      // Missing / null / invalid angles -> Unmeasured
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: null }).depthCategory, 'Unmeasured');
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: undefined }).depthCategory, 'Unmeasured');
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: -1 }).depthCategory, 'Unmeasured');
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: 181 }).depthCategory, 'Unmeasured');
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: NaN }).depthCategory, 'Unmeasured');
+      assert.strictEqual(assessSquat({ leftKneeMinAngle: Infinity }).depthCategory, 'Unmeasured');
+    });
+
+    it('prefers the mean of per-repetition minima when available', () => {
+      const measurement = {
+        leftKneeMinAngle: 65.0,
+        rightKneeMinAngle: 65.0,
+      };
+      const repStats = {
+        leftMeanRepMin: 85.0,
+        rightMeanRepMin: 85.0,
+      };
+
+      const result = assessSquat(measurement, repStats);
+      assert.strictEqual(result.depthCategory, 'Parallel');
+      assert.strictEqual(result.evaluatedKneeAngle, 85.0);
+      assert.strictEqual(result.clinicalFlexionDegrees, 95.0);
+      assert.strictEqual(result.depthSource, 'mean_rep_min');
+      assert.ok(result.flags.includes('rep_mean_depth_used'));
+      assert.ok(result.summary.includes('mean of per-repetition minima'));
+    });
+
+    it('falls back to the overall minimum when repetition data is missing or unavailable', () => {
+      const measurement = {
+        leftKneeMinAngle: 68.0,
+        rightKneeMinAngle: 72.0,
+      };
+
+      const resultNoReps = assessSquat(measurement);
+      assert.strictEqual(resultNoReps.depthCategory, 'Deep');
+      assert.strictEqual(resultNoReps.evaluatedKneeAngle, 68.0);
+      assert.strictEqual(resultNoReps.depthSource, 'overall_min');
+      assert.ok(resultNoReps.flags.includes('fallback_depth_used'));
+      assert.ok(resultNoReps.summary.includes('overall minimum angle'));
+
+      const resultNullReps = assessSquat(measurement, { leftMeanRepMin: null, rightMeanRepMin: null });
+      assert.strictEqual(resultNullReps.depthCategory, 'Deep');
+      assert.strictEqual(resultNullReps.evaluatedKneeAngle, 68.0);
+      assert.strictEqual(resultNullReps.depthSource, 'overall_min');
+      assert.ok(resultNullReps.flags.includes('fallback_depth_used'));
+    });
+
+    it('calculates bilateral difference and sets deeper side when both legs are valid', () => {
+      const leftDeeper = assessSquat({ leftKneeMinAngle: 70.0, rightKneeMinAngle: 82.5 });
+      assert.strictEqual(leftDeeper.asymmetryDegrees, 12.5);
+      assert.strictEqual(leftDeeper.deeperSide, 'left');
+      assert.ok(leftDeeper.flags.includes('asymmetry_noted'));
+      assert.ok(leftDeeper.summary.includes('left knee bending deeper'));
+
+      const rightDeeper = assessSquat({ leftKneeMinAngle: 90.0, rightKneeMinAngle: 78.0 });
+      assert.strictEqual(rightDeeper.asymmetryDegrees, 12.0);
+      assert.strictEqual(rightDeeper.deeperSide, 'right');
+      assert.ok(rightDeeper.flags.includes('asymmetry_noted'));
+      assert.ok(rightDeeper.summary.includes('right knee bending deeper'));
+
+      const equalDepth = assessSquat({ leftKneeMinAngle: 85.0, rightKneeMinAngle: 87.0 });
+      assert.strictEqual(equalDepth.asymmetryDegrees, 2.0);
+      assert.strictEqual(equalDepth.deeperSide, 'left');
+      assert.ok(!equalDepth.flags.includes('asymmetry_noted'));
+    });
+
+    it('skips asymmetry calculation when either leg is null or unavailable and explains in summary', () => {
+      const leftOnly = assessSquat({ leftKneeMinAngle: 75.0, rightKneeMinAngle: null });
+      assert.strictEqual(leftOnly.asymmetryDegrees, null);
+      assert.strictEqual(leftOnly.deeperSide, null);
+      assert.strictEqual(leftOnly.depthCategory, 'Parallel');
+      assert.ok(leftOnly.flags.includes('single_leg_visible'));
+      assert.ok(leftOnly.summary.includes('Bilateral asymmetry could not be assessed because only one leg was clearly visible'));
+
+      const rightOnly = assessSquat({ leftKneeMinAngle: null, rightKneeMinAngle: 68.0 });
+      assert.strictEqual(rightOnly.asymmetryDegrees, null);
+      assert.strictEqual(rightOnly.deeperSide, null);
+      assert.strictEqual(rightOnly.depthCategory, 'Deep');
+      assert.ok(rightOnly.flags.includes('single_leg_visible'));
+      assert.ok(rightOnly.summary.includes('Bilateral asymmetry could not be assessed because only one leg was clearly visible'));
+
+      const bothNull = assessSquat({ leftKneeMinAngle: null, rightKneeMinAngle: null });
+      assert.strictEqual(bothNull.asymmetryDegrees, null);
+      assert.strictEqual(bothNull.depthCategory, 'Unmeasured');
+      assert.ok(bothNull.flags.includes('depth_unmeasured'));
+    });
+
+    it('handles malformed, non-finite, missing, and snake_case data safely without throwing', () => {
+      const fromNull = assessSquat(null, null);
+      assert.strictEqual(fromNull.depthCategory, 'Unmeasured');
+      assert.strictEqual(fromNull.asymmetryDegrees, null);
+
+      const fromPrimitive = assessSquat('invalid', 123);
+      assert.strictEqual(fromPrimitive.depthCategory, 'Unmeasured');
+
+      const snakeCaseBackend = {
+        left_knee_min_angle: 80.0,
+        right_knee_min_angle: 85.0,
+      };
+      const snakeCaseReps = {
+        left_knee_mean_rep_min_angle: 78.0,
+        right_knee_mean_rep_min_angle: 82.0,
+        left_knee_rep_min_angles: [78.0, 78.0],
+        right_knee_rep_min_angles: [82.0, 82.0],
+        rep_detection: 'ok',
+      };
+      const snakeRes = assessSquat(snakeCaseBackend, snakeCaseReps);
+      assert.strictEqual(snakeRes.depthCategory, 'Parallel');
+      assert.strictEqual(snakeRes.evaluatedKneeAngle, 78.0);
+      assert.strictEqual(snakeRes.asymmetryDegrees, 4.0);
+
+      const unsupported = assessSquat({ movement: 'walk', leftKneeMinAngle: 90.0 });
+      assert.ok(unsupported.flags.includes('unsupported_movement'));
+    });
+
+    it('integrates cleanly into assessSquatMovement', () => {
+      const measurement = {
+        movement: 'squat',
+        metric: 'knee_flexion_angle',
+        unit: 'degrees',
+        leftKneeMinAngle: 65.0,
+        rightKneeMinAngle: 75.0,
+        hasLeftAngle: true,
+        hasRightAngle: true,
+      };
+      const reps = {
+        leftMeanRepMin: 68.0,
+        rightMeanRepMin: 76.0,
+        leftRepMins: [68.0, 68.0],
+        rightRepMins: [76.0, 76.0],
+        repDetection: 'ok',
+      };
+
+      const outcome = assessSquatMovement(measurement, reps);
+      assert.ok(outcome !== null);
+      assert.ok(outcome.squatAssessment !== undefined);
+      assert.strictEqual(outcome.squatAssessment.depthCategory, 'Deep');
+      assert.strictEqual(outcome.squatAssessment.evaluatedKneeAngle, 68.0);
+      assert.strictEqual(outcome.squatAssessment.asymmetryDegrees, 8.0);
+      assert.deepStrictEqual(outcome.squatAssessment.sources, SQUAT_ASSESSMENT_SOURCES);
     });
   });
 });

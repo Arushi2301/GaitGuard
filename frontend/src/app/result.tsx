@@ -189,10 +189,26 @@ export default function Result() {
             {/* Screening Assessment (Squat only) */}
             {assessment && (
               <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                  <Ionicons name="analytics-outline" size={18} color={colors.primary} />
-                  <Text style={[s.cardTitle, { color: colors.text, marginBottom: 0, marginLeft: 6 }]}>
-                    Screening Assessment
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="analytics-outline" size={18} color={colors.primary} />
+                    <Text style={[s.cardTitle, { color: colors.text, marginBottom: 0, marginLeft: 6 }]}>
+                      Screening Assessment
+                    </Text>
+                  </View>
+                  {assessment.squatAssessment.depthCategory !== 'Unmeasured' && (
+                    <View style={[s.badge, { backgroundColor: colors.mint }]}>
+                      <Text style={[s.badgeText, { color: colors.onPastel }]}>
+                        {assessment.squatAssessment.depthCategory}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Plain-language non-diagnostic summary */}
+                <View style={{ backgroundColor: colors.bg, padding: 10, borderRadius: radius.md, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 13, color: colors.text, lineHeight: 19 }}>
+                    {assessment.squatAssessment.summary}
                   </Text>
                 </View>
 
@@ -202,7 +218,8 @@ export default function Result() {
                       {guide.assessmentTitle}
                     </Text>
                     <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 18 }}>
-                      {assessment.primaryLeg.description}
+                      {assessment.squatAssessment.depthCategory} depth — {assessment.primaryLeg.description}
+                      {assessment.squatAssessment.depthSource === 'mean_rep_min' ? ' (mean of rep minima)' : ' (overall minimum angle)'}.
                     </Text>
                     <Text style={{ fontSize: 11, color: colors.muted, opacity: 0.8, marginTop: 2 }}>
                       {guide.assessmentNote}
@@ -223,6 +240,35 @@ export default function Result() {
                     </Text>
                   )}
                 </View>
+
+                {assessment.squatAssessment.flags.length > 0 && (
+                  <View style={{ marginBottom: 10 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.muted, marginBottom: 4 }}>
+                      Screening Notes
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                      {assessment.squatAssessment.flags.map(flag => (
+                        <View key={flag} style={{ backgroundColor: colors.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, marginRight: 6, marginBottom: 4 }}>
+                          <Text style={{ fontSize: 11, color: colors.muted }}>
+                            {flag === 'asymmetry_noted'
+                              ? 'Left–right difference \u2265 10°'
+                              : flag === 'single_leg_visible'
+                              ? 'Single leg visible'
+                              : flag === 'rep_mean_depth_used'
+                              ? 'Repetition mean depth'
+                              : flag === 'fallback_depth_used'
+                              ? 'Overall minimum fallback'
+                              : flag === 'rep_detection_fallback'
+                              ? 'Single-motion fallback'
+                              : flag === 'insufficient_reps'
+                              ? '< 2 clean reps'
+                              : flag}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
 
                 {reps && (reps.leftRepMins.length > 0 || reps.rightRepMins.length > 0 || reps.repDetection === 'fallback_overall_min') && (
                   <View>

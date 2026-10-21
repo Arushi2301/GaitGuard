@@ -6,6 +6,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View
 import { Avatar } from '../components/TopBar';
 import { useAuth } from '../services/auth';
 import { useSettings } from '../services/settings';
+import { clearUserHistory } from '../services/history';
 import { radius, space } from '../theme/palette';
 import { useTheme } from '../theme/ThemeContext';
 
@@ -111,14 +112,18 @@ export default function Settings() {
   };
 
   const clearHistory = () => {
-    Alert.alert('Clear history?', 'All saved analysis results on this phone will be deleted.', [
+    Alert.alert('Clear history?', 'All saved analysis results for your account will be deleted.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Clear',
         style: 'destructive',
         onPress: async () => {
-          await AsyncStorage.removeItem('gg.history');
-          Alert.alert('Done', 'Analysis history cleared.');
+          if (user?.email) {
+            await clearUserHistory(user.email);
+            Alert.alert('Done', 'Your analysis history has been cleared.');
+          } else {
+            Alert.alert('Notice', 'You must be signed in to clear your history.');
+          }
         },
       },
     ]);
@@ -173,7 +178,7 @@ export default function Settings() {
           right={toggle(settings.notifications, v => updateSettings({ notifications: v }))} />
       </Section>
 
-      
+
 
       <Section title="SERVER">
         <View style={{ padding: space.md }}>

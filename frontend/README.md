@@ -133,13 +133,18 @@ used at runtime.
  
 ## Tests
  
-Screening logic tests (Member 3):
+Screening logic and history/progress tests:
  
 ```bash
+npm test
+# or run individual suites:
 node --test src/services/__tests__/screening.test.js
+node --test src/services/__tests__/history.test.js
+node --test src/services/__tests__/bmi.test.js
+node --test src/services/__tests__/greeting.test.js
 ```
  
-(`npm test` passes a folder to `node --test`, which does not work on Windows; use the command above.)
+(`npm test` runs all test suites directly cross-platform using the `"node --test \"src/services/__tests__/*.test.js\""` pattern.)
  
 ---
  
@@ -207,13 +212,68 @@ The `Content-Type` header is not set manually.
 `null` angles are shown as **"Not measured"**, never as 0. Angles are interior knee angles
 (180° = straight leg; smaller = deeper bend). Only the first 15 s of a video are analyzed.
  
-Screening assessment logic in `screening.ts` provides evidence-based descriptive metrics:
-- Converts backend interior angles (180° = straight leg) to clinical knee flexion (`180° - angle`).
-- Reports continuous knee-angle measurements and cautions that knee angle alone cannot establish anatomical squat depth or whether thighs are parallel; it does not assign categorical depth labels.
-- Calculates left–right depth difference descriptively with 2D perspective caveats (no arbitrary normal/abnormal cutoffs).
-- Reports observed repetition spread when at least two valid repetitions are segmented (no arbitrary consistency cutoffs).
-- Restricts squat assessment strictly to the supported squat movement.
- 
+### Member 3 Screening Assessment (`assessSquat`)
+
+Screening assessment logic in `src/services/screening.ts` provides evidence-based kinematic screening:
+
+#### 1. Function Specification & Interface
+
+```typescript
+export function assessSquat(
+  measurement: ValidatedMeasurement | Record<string, any> | null | undefined,
+  repStats?: RepStatsInput | null
+): SquatAssessment;
+```
+
+**Return Type (`SquatAssessment`):**
+- `depthCategory`: `'Deep' | 'Parallel' | 'Half' | 'Shallow' | 'Unmeasured'`
+- `asymmetryDegrees`: `number | null` (absolute bilateral difference in degrees, or `null` if unilateral/invalid)
+- `flags`: Array of screening flags (`'rep_mean_depth_used'`, `'fallback_depth_used'`, `'single_leg_visible'`, `'asymmetry_noted'`, `'insufficient_reps'`, `'unsupported_movement'`, `'depth_unmeasured'`)
+- `summary`: Plain-language, non-diagnostic observational summary
+- `sources`: Published sports-science reference citations
+- `evaluatedKneeAngle`: Evaluated interior knee angle in degrees (`180°` = straight leg)
+- `clinicalFlexionDegrees`: Clinical knee flexion equivalent in degrees (`180° - interior angle`)
+- `depthSource`: `'mean_rep_min'` (preferred) or `'overall_min'` (fallback)
+- `leftDepthAngle` / `rightDepthAngle`: Per-leg evaluated angles
+- `deeperSide`: `'left' | 'right' | 'equal' | null`
+- `repetitionSpreadDegrees`: Observed spread across valid per-repetition minima
+
+#### 2. Depth Category Boundaries & Scientific Literature
+
+Depth categories are mapped using backend interior knee angles and converted clinical flexion (`clinical = 180° - interior`):
+
+| Depth Category | Interior Angle Range | Clinical Flexion Range | Published Citations |
+| --- | --- | --- | --- |
+| **Deep** | `<= 70.0°` | `>= 110.0°` | Escamilla (2001), Hartmann et al. (2013) |
+| **Parallel** | `70.1° – 90.0°` | `90.0° – 109.9°` | Escamilla (2001), Schoenfeld (2010) |
+| **Half** | `90.1° – 120.0°` | `60.0° – 89.9°` | Escamilla (2001), Caterisano et al. (2002) |
+| **Shallow** | `> 120.0°` | `< 60.0°` | Escamilla (2001) |
+| **Unmeasured** | Missing / non-finite / out of range | — | Handled safely without defaulting to 0° |
+
+**Depth Priority:**
+- When valid per-repetition minima are available, the mean of rep minima is preferred (`depthSource: 'mean_rep_min'`, flag `rep_mean_depth_used`).
+- If repetition data is unavailable, the backend overall minimum is used as a fallback (`depthSource: 'overall_min'`, flag `fallback_depth_used`).
+
+#### 3. Bilateral Asymmetry Evaluation & Single-Camera Limitations
+
+- **Calculation:** Absolute difference `|left - right|` is computed **only** when both legs have valid measured angles.
+- **Single Leg Visible:** If only one leg is visible, asymmetry is set to `null` and flagged (`single_leg_visible`), with an explicit note in the summary.
+- **Perspective Caveat:** A flag (`asymmetry_noted`) is added when asymmetry is `>= 10.0°`, accompanied by an explicit reminder that in 2D single-camera lateral video, camera angle, perspective projection, and far-leg occlusion naturally introduce apparent asymmetry. No arbitrary clinical normal/abnormal thresholds are applied (Bishop et al., 2018).
+
+#### 4. Sports-Science Citations
+
+- **Escamilla RF.** (2001). Knee biomechanics of the dynamic squat exercise. *Medicine & Science in Sports & Exercise*, 33(1), 127–141. DOI: [10.1097/00005768-200101000-00020](https://doi.org/10.1097/00005768-200101000-00020)
+- **Schoenfeld BJ.** (2010). Squatting kinematics and kinetics and their application to exercise performance. *Journal of Strength and Conditioning Research*, 24(12), 3497–3506. DOI: [10.1519/JSC.0b013e3181bac2d7](https://doi.org/10.1519/JSC.0b013e3181bac2d7)
+- **Hartmann H, Wirth K, Klusemann M.** (2013). Analysis of the load on the knee joint and vertebral column with changes in squatting depth and weight load. *Sports Medicine*, 43(10), 993–1008. DOI: [10.1007/s40279-013-0073-6](https://doi.org/10.1007/s40279-013-0073-6)
+- **Bishop C, Turner A, Read P.** (2018). Interlimb asymmetries: Understanding how to calculate differences from bilateral and unilateral tests. *Strength and Conditioning Journal*, 40(4), 1–6. DOI: [10.1519/SSC.0000000000000371](https://doi.org/10.1519/SSC.0000000000000371)
+
+#### 5. Non-Diagnostic Language & Limitations
+
+- GaitGuard provides informational movement screening and kinematic observation only.
+- It does not diagnose musculoskeletal conditions, predict injury risk, or assess exercise safety.
+- Users experiencing discomfort or functional concerns are directed to consult a qualified sports-medicine professional.
+- Movement scoping: squat-specific assessment is strictly restricted to supported squat movements (`movement === 'squat'`).
+
 ---
  
 ## Data storage
