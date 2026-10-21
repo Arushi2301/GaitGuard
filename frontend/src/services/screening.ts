@@ -35,6 +35,30 @@ export const SCIENTIFIC_ASSESSMENT_DISCLAIMER =
 
 /* ---------- Assessment Types ---------- */
 
+export type SquatDepthCategory = 'Deep' | 'Parallel' | 'Half' | 'Shallow' | 'Unmeasured';
+
+export interface SquatAssessment {
+  depthCategory: SquatDepthCategory;
+  asymmetryDegrees: number | null;
+  flags: string[];
+  summary: string;
+  sources: string[];
+  evaluatedKneeAngle: number | null;
+  clinicalFlexionDegrees: number | null;
+  depthSource: 'mean_rep_min' | 'overall_min' | 'none';
+  leftDepthAngle: number | null;
+  rightDepthAngle: number | null;
+  deeperSide: 'left' | 'right' | 'equal' | null;
+  repetitionSpreadDegrees: number | null;
+}
+
+export const SQUAT_ASSESSMENT_SOURCES: string[] = [
+  'Escamilla, R. F. (2001). Knee biomechanics of the dynamic squat exercise. Medicine & Science in Sports & Exercise, 33(1), 127–141.',
+  'Schoenfeld, B. J. (2010). Squatting kinematics and kinetics and their application to exercise performance. Journal of Strength and Conditioning Research, 24(12), 3497–3506.',
+  'Hartmann, H., Wirth, K., & Klusemann, M. (2013). Analysis of the load on the knee joint and vertebral column with changes in squatting depth and weight load. Sports Medicine, 43(10), 993–1008.',
+  'Bishop, C., Turner, A., & Read, P. (2018). Effects of inter-limb asymmetries on physical and sports performance: a systematic review. Sports Medicine, 48(5), 1131–1145.',
+];
+
 export interface LegDepthAssessment {
   interiorAngle: number;
   clinicalFlexionAngle: number;
@@ -73,6 +97,7 @@ export interface SquatScreeningAssessment {
   primaryLeg: LegDepthAssessment | null;
   asymmetry: AsymmetryAssessment;
   repetitionVariation: RepetitionVariationAssessment;
+  squatAssessment: SquatAssessment;
   disclaimer: string;
 }
 
@@ -391,6 +416,210 @@ export function assessRepetitionVariation(
 }
 
 /**
+ * Assesses squat screening kinematics based on published sports-science literature.
+ *
+ * Requirements:
+ * - Determine depth from the mean of per-repetition minimum angles when available;
+ *   otherwise, fall back to the overall minimum angle.
+ * - Calculate absolute left–right difference only when both corresponding measurements are valid.
+ * - If either leg is null or unavailable, skip asymmetry calculation and state that it could not be assessed.
+ * - Return plain-language, non-diagnostic wording ("screening result", "consider a professional assessment").
+ * - Include a reference list in the returned result.
+ * - Do not claim that a result establishes injury, diagnoses a condition, or predicts injury risk.
+ */
+export function assessSquat(
+  measurement?: unknown,
+  repStats?: unknown
+): SquatAssessment {
+  const m = measurement && typeof measurement === 'object' ? (measurement as Record<string, unknown>) : {};
+  const r = repStats && typeof repStats === 'object' ? (repStats as Record<string, unknown>) : {};
+
+  // Safe angle extractor: finite number in [0, 180]
+  const parseAngle = (v: unknown): number | null => {
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 180) {
+      return Math.round(v * 10) / 10;
+    }
+    return null;
+  };
+
+  // 1. Resolve Left Leg Angle: rep mean preferred, overall minimum fallback
+  const leftMean = parseAngle(r.leftMeanRepMin ?? r.left_knee_mean_rep_min_angle);
+  const leftOverall = parseAngle(m.leftKneeMinAngle ?? m.left_knee_min_angle);
+  let leftDepthAngle: number | null = null;
+  let leftSource: 'mean_rep_min' | 'overall_min' | 'none' = 'none';
+
+  if (leftMean !== null) {
+    leftDepthAngle = leftMean;
+    leftSource = 'mean_rep_min';
+  } else if (leftOverall !== null) {
+    leftDepthAngle = leftOverall;
+    leftSource = 'overall_min';
+  }
+
+  // 2. Resolve Right Leg Angle: rep mean preferred, overall minimum fallback
+  const rightMean = parseAngle(r.rightMeanRepMin ?? r.right_knee_mean_rep_min_angle);
+  const rightOverall = parseAngle(m.rightKneeMinAngle ?? m.right_knee_min_angle);
+  let rightDepthAngle: number | null = null;
+  let rightSource: 'mean_rep_min' | 'overall_min' | 'none' = 'none';
+
+  if (rightMean !== null) {
+    rightDepthAngle = rightMean;
+    rightSource = 'mean_rep_min';
+  } else if (rightOverall !== null) {
+    rightDepthAngle = rightOverall;
+    rightSource = 'overall_min';
+  }
+
+  // 3. Determine Evaluated Primary Depth Angle (smaller interior angle = deeper flexion)
+  let evaluatedKneeAngle: number | null = null;
+  let depthSource: 'mean_rep_min' | 'overall_min' | 'none' = 'none';
+
+  if (leftDepthAngle !== null && rightDepthAngle !== null) {
+    if (leftDepthAngle <= rightDepthAngle) {
+      evaluatedKneeAngle = leftDepthAngle;
+      depthSource = leftSource;
+    } else {
+      evaluatedKneeAngle = rightDepthAngle;
+      depthSource = rightSource;
+    }
+  } else if (leftDepthAngle !== null) {
+    evaluatedKneeAngle = leftDepthAngle;
+    depthSource = leftSource;
+  } else if (rightDepthAngle !== null) {
+    evaluatedKneeAngle = rightDepthAngle;
+    depthSource = rightSource;
+  }
+
+  // Clinical flexion = 180 - interior angle
+  const clinicalFlexionDegrees = evaluatedKneeAngle !== null
+    ? Math.round((180 - evaluatedKneeAngle) * 10) / 10
+    : null;
+
+  // 4. Determine Depth Category based on published literature (Escamilla 2001, Schoenfeld 2010)
+  // Interior <= 70° (flexion >= 110°) -> Deep
+  // Interior 70.1°..90.0° (flexion 90°..109.9°) -> Parallel
+  // Interior 90.1°..120.0° (flexion 60°..89.9°) -> Half
+  // Interior > 120.0° (flexion < 60°) -> Shallow
+  let depthCategory: SquatDepthCategory = 'Unmeasured';
+  if (evaluatedKneeAngle !== null) {
+    if (evaluatedKneeAngle <= 70.0) {
+      depthCategory = 'Deep';
+    } else if (evaluatedKneeAngle <= 90.0) {
+      depthCategory = 'Parallel';
+    } else if (evaluatedKneeAngle <= 120.0) {
+      depthCategory = 'Half';
+    } else {
+      depthCategory = 'Shallow';
+    }
+  }
+
+  // 5. Bilateral Difference & Asymmetry
+  let asymmetryDegrees: number | null = null;
+  let deeperSide: 'left' | 'right' | 'equal' | null = null;
+
+  if (leftDepthAngle !== null && rightDepthAngle !== null) {
+    asymmetryDegrees = Math.round(Math.abs(leftDepthAngle - rightDepthAngle) * 10) / 10;
+    if (leftDepthAngle < rightDepthAngle) {
+      deeperSide = 'left';
+    } else if (rightDepthAngle < leftDepthAngle) {
+      deeperSide = 'right';
+    } else {
+      deeperSide = 'equal';
+    }
+  }
+
+  // 6. Flags
+  const flags: string[] = [];
+
+  if (depthSource === 'mean_rep_min') {
+    flags.push('rep_mean_depth_used');
+  } else if (depthSource === 'overall_min') {
+    flags.push('fallback_depth_used');
+  } else {
+    flags.push('depth_unmeasured');
+  }
+
+  if (leftDepthAngle !== null && rightDepthAngle !== null) {
+    if (asymmetryDegrees !== null && asymmetryDegrees >= 10.0) {
+      flags.push('asymmetry_noted');
+    }
+  } else if (leftDepthAngle !== null || rightDepthAngle !== null) {
+    flags.push('single_leg_visible');
+  }
+
+  const repDetection = r.repDetection ?? r.rep_detection;
+  if (repDetection === 'fallback_overall_min') {
+    flags.push('rep_detection_fallback');
+  }
+
+  // Repetition spread calculation if arrays exist
+  let repetitionSpreadDegrees: number | null = null;
+  const leftArray = Array.isArray(r.leftRepMins)
+    ? r.leftRepMins
+    : Array.isArray(r.left_knee_rep_min_angles)
+    ? r.left_knee_rep_min_angles
+    : [];
+  const rightArray = Array.isArray(r.rightRepMins)
+    ? r.rightRepMins
+    : Array.isArray(r.right_knee_rep_min_angles)
+    ? r.right_knee_rep_min_angles
+    : [];
+  const repList = leftArray.length > 0 ? leftArray : rightArray;
+  const validReps = (repList as unknown[]).map(parseAngle).filter((a): a is number => a !== null);
+  if (validReps.length >= 2 && repDetection !== 'fallback_overall_min') {
+    repetitionSpreadDegrees = Math.round((Math.max(...validReps) - Math.min(...validReps)) * 10) / 10;
+  } else if (repDetection !== 'fallback_overall_min' && validReps.length < 2 && validReps.length > 0) {
+    flags.push('insufficient_reps');
+  }
+
+  const movement = (m.movement ?? m.movement_name ?? '').toString().toLowerCase();
+  if (movement && movement !== 'squat') {
+    flags.push('unsupported_movement');
+  }
+
+  // 7. Plain-Language, Non-Diagnostic Summary
+  let summary = '';
+  if (depthCategory === 'Unmeasured') {
+    summary = 'Screening result: Knee angle measurements could not be evaluated. Ensure full body and legs are clearly visible in the video frame.';
+  } else {
+    const depthDesc = depthSource === 'mean_rep_min'
+      ? 'based on the mean of per-repetition minima'
+      : 'based on the overall minimum angle';
+
+    let asymDesc = '';
+    if (asymmetryDegrees !== null) {
+      if (deeperSide === 'equal') {
+        asymDesc = ' Both knees reached identical measured depth.';
+      } else {
+        asymDesc = ` Observed left–right knee angle difference was ${asymmetryDegrees.toFixed(1)}° (${deeperSide} knee bending deeper).`;
+        if (asymmetryDegrees >= 10.0) {
+          asymDesc += ' In single-camera lateral video, 2D perspective and far-leg occlusion naturally contribute to observed asymmetry.';
+        }
+      }
+    } else {
+      asymDesc = ' Bilateral asymmetry could not be assessed because only one leg was clearly visible in the video.';
+    }
+
+    summary = `Screening result: Observed ${depthCategory} squat depth with knee flexion reaching approximately ${clinicalFlexionDegrees?.toFixed(1)}° (interior angle ${evaluatedKneeAngle?.toFixed(1)}°), ${depthDesc}.${asymDesc} This screening result is an observational estimate and not a clinical diagnosis; consider a professional assessment if experiencing discomfort or functional concerns.`;
+  }
+
+  return {
+    depthCategory,
+    asymmetryDegrees,
+    flags,
+    summary,
+    sources: SQUAT_ASSESSMENT_SOURCES,
+    evaluatedKneeAngle,
+    clinicalFlexionDegrees,
+    depthSource,
+    leftDepthAngle,
+    rightDepthAngle,
+    deeperSide,
+    repetitionSpreadDegrees,
+  };
+}
+
+/**
  * Orchestrator: assesses squat screening results.
  * Strictly verifies movement === 'squat'. Returns null for non-squat movements.
  */
@@ -401,6 +630,8 @@ export function assessSquatMovement(
   if (measurement.movement !== 'squat') {
     return null;
   }
+
+  const squatAssessment = assessSquat(measurement, reps);
 
   const leftDepth = assessSquatDepth(measurement.leftKneeMinAngle);
   const rightDepth = assessSquatDepth(measurement.rightKneeMinAngle);
@@ -438,6 +669,7 @@ export function assessSquatMovement(
     primaryLeg,
     asymmetry,
     repetitionVariation: repVariation,
+    squatAssessment,
     disclaimer: SCIENTIFIC_ASSESSMENT_DISCLAIMER,
   };
 }
